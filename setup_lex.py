@@ -62,3 +62,12 @@ def setup_ic_option1(rho0, theta0, pi0, theta_p, pi_p, qv, u, v, w):
     # ...
     return rho0, theta0, pi0, theta_p, pi_p, qv, u, v, w
 
+
+def setup_damping_tau(z3d, z3d4w):
+    """ Set up the ramp-up factor for Rayleigh damping """
+    tauh = 0.5 * (1.0 - np.cos(np.pi * (z3d - nl.z_damping) / (z3d4w[:, :, -1] - nl.z_damping)))
+    tauf = 0.5 * (1.0 - np.cos(np.pi * (z3d4w - nl.z_damping) / (z3d4w[:, :, -1] - nl.z_damping)))
+    tauh = np.where(z3d <= nl.z_damping, 0.0, tauh)
+    tauf = np.where(z3d4w <= nl.z_damping, 0.0, tauf)
+    return tauh, tauf
+
