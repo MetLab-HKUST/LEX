@@ -1,8 +1,6 @@
 """ Functions for computing boundary conditions """
 import jax
 import jax.numpy as jnp
-import numpy as np
-
 import namelist_n_constants as nl
 
 
@@ -105,7 +103,7 @@ def psi_m_s(hol):
 
 def set_w_bc(w):
     """ Set w values at the bottom and top interface """
-    w_zeros = np.zeros((nl.nx + 2 * nl.ngx, nl.ny + 2 * nl.ngy, 2))  # dummy array with 1s
+    w_zeros = jnp.zeros((nl.nx + 2 * nl.ngx, nl.ny + 2 * nl.ngy, 2))  # dummy array with 0s
     w = w.at[:, :, 0:2].set(w_zeros)
     w = w.at[:, :, -2:].set(w_zeros)
     return w

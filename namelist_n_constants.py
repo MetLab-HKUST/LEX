@@ -1,5 +1,8 @@
 """ Namelist variables and constants for LEX """
 
+# Time integration
+dt = 10.0    # integration time step
+
 # Grid configuration
 dx = 100.0   # x-direction grid spacing in meters
 dy = 100.0   # y-direction grid spacing in meters

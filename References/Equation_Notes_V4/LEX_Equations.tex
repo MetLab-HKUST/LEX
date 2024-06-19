@@ -1,0 +1,234 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[left=2.5cm,top=2.5cm,right=2.5cm,bottom=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage[font=footnotesize,labelfont=bf]{caption}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{algorithm2e}
+
+%\usepackage{amsmath,amsthm} 
+%\usepackage{newtxtext}
+%\usepackage{newtxmath}
+% 
+% \usepackage[p,osf]{scholax}
+% T1 and textcomp are loaded by package. Change that here, if you want
+% load sans and typewriter packages here, if needed
+% \usepackage{amsmath,amsthm}% must be loaded before newtxmath
+% amssymb should not be loaded
+% \usepackage[scaled=1.075,ncf,vvarbb]{newtxmath}% need to scale up math package
+% vvarbb selects the STIX version of blackboard bold.
+
+% \usepackage[T1]{fontenc}
+% \usepackage{stix}
+
+\usepackage{kpfonts}
+\usepackage[T1]{fontenc}
+
+% 
+% \usepackage{libertinus}
+% \usepackage[T1]{fontenc}
+% \renewcommand*\familydefault{\sfdefault} %% Only if the base font of the document is to be sans serif
+
+\setlength{\parskip}{3ex}
+\setlength{\parindent}{1.5em}
+\renewcommand{\baselinestretch}{1.5}
+
+\usepackage{amsmath,amsthm}
+\usepackage[most]{tcolorbox}
+
+\tcbset{colback=yellow!10!white, colframe=red!50!black, 
+        highlight math style= {enhanced, %<-- needed for the ’remember’ options
+            colframe=red,colback=red!10!white,boxsep=0pt}
+        }
+        
+
+% Title Page
+\title{\textbf{LEX Governing Equations}}
+\author{Xiaoming Shi}
+
+\begin{document}
+\maketitle
+
+The governing equations we adopted are the acoustic-wave-filtered equations for compressible stratified flow by Durran (2008). A pseudo-density $\rho^*$ is defined to eliminate sound waves. Mass conservation is enforced with respect to this pseudo-density such at
+\begin{equation}
+ \frac{1}{\rho^*} \frac{D \rho^*}{D t} + \nabla\cdot \mathbf{u} = 0 \nonumber
+\end{equation}
+
+In Durran (2008), the pseudo-density is defined as 
+\begin{equation}
+ \rho^* = \frac{\tilde{\rho}(x,y,z,t)\tilde{\theta}(x,y,z,t)}{\theta} \nonumber 
+\end{equation}
+where $\tilde{\ }$ denotes a spatially varying reference state. With this definition, the mass (pseudo-density) conservation equation becomes, with some approximation,
+\begin{equation}
+\tcboxmath{
+\frac{\partial \tilde{\rho} \tilde{\theta}}{\partial t} + \nabla\cdot (\tilde{\rho}\tilde{\theta}\mathbf{u}) = \frac{\tilde{\rho} H_m}{c_p \tilde{\pi}}
+}
+\end{equation}
+in which, $H_m$ is the heating rate per unit mass. 
+
+Define perturbations with respect to the reference state such that $\theta' = \theta - \tilde{\theta}$ and $\pi' = \pi - \tilde{\pi}$. Durran (2018) further separated $\tilde{\pi}$ into a large horizontally uniform component $\tilde{\pi}_v(z,t)$ and a remainder $\tilde{\pi}_h(x,y,z,t)$ for computational accuracy and notational convenience. Then the momentum and thermodynamics equations are the following,
+\begin{equation}
+\tcboxmath{
+\frac{D \mathbf{u}_h}{D t}  + f {\mathbf{k}} \times \mathbf{u}_h +  c_p \theta\,\nabla_h(\tilde{\pi}_h + \pi') = 0
+}
+\end{equation}
+\begin{equation}
+ \tcboxmath{
+ \frac{D w}{D t} + c_p \theta \frac{\partial \pi'}{\partial z} = B%g\frac{\theta'}{\tilde{\theta}}
+ }
+\end{equation}
+\begin{equation}
+\tcboxmath{
+ \frac{D \theta }{D t} = \frac{H_m}{c_p \tilde{\pi}}
+ }
+\end{equation}
+where $\mathbf{u}_h$ is the horizontal velocity vector, $\nabla_h$ is the horizontal gradient operator, and $f$ is the Coriolis parameter. $B$ is the linearized bouancy,
+\begin{equation}
+B = g\left[\frac{\theta'}{\tilde{\theta}} + \left(\frac{1}{\epsilon}-1 \right)q_v - q_l- q_i\right]
+\end{equation}
+in which, $q_v$ is the mixing ratio of water vapor, $q_l$ and $q_i$ are that of liquid cloud water and ice, respectively.
+
+With this system of equations, at each time step, we can march equations (1) and (4) first. Note that from (1) we cannot separate $\tilde{\rho}$ and $\tilde{\theta}$, we need use the equation of state and hydrostatic balance equation. The reference state satisfies the equation of state such that 
+\begin{equation}
+\tcboxmath{
+ \tilde{\pi} = \left( \frac{R}{p_s} \tilde{\rho} \tilde{\theta} \right)^{R/c_v}
+ }
+ \label{eqn:state}
+\end{equation}
+Then we can derive $\tilde{\theta}$ from the hydrostatic balance equation,
+\begin{equation}
+ \tcboxmath{
+ c_p \tilde{\theta} \frac{\partial \tilde{\pi}}{\partial z} = -g 
+ }
+ \label{eqn:hystatic}
+\end{equation}
+and $\tilde{\rho}$ can be obtained after knowing $\tilde{\theta}$. \textit{The effect of moisture has been ignored equation (\ref{eqn:state}) and (\ref{eqn:hystatic}).}
+
+The last variable we still do not know for the new time step is the pressure perturbation $\pi'$, which needs to be solved diagnostically to enforce Equation (1). The diagnostic relationship is obtained by multiplying the momentum equation by $\tilde{\rho}\tilde{\theta}$, taking the divergence of the result and subtracting $\partial/\partial t$ of Equation (1). The resulting diagnostic equation is provided by Durran (2008) as his Equation (5.2)
+\begin{equation}
+ \tcboxmath{
+ \begin{aligned}
+  c_p\nabla\cdot(\tilde{\rho}\tilde{\theta}\theta\nabla\pi') =& -\nabla\cdot(\tilde{\rho}\tilde{\theta}\mathbf{u}\cdot\nabla)\mathbf{u} - f\nabla_h \cdot (\mathbf{k}\times \tilde{\rho}\tilde{\theta}\mathbf{u}_h) + g\frac{\partial\,\tilde{\rho}\tilde{\theta}B}{\partial z}\\
+  &  - c_p\nabla_h\cdot(\tilde{\rho}\tilde{\theta}\theta \nabla_h\tilde{\pi}_h)
+  - \frac{\partial }{\partial t}\left(\frac{\tilde{\rho}H_m}{c_p\tilde{\pi}} \right) +
+  \nabla\cdot\left(\frac{\partial\,\tilde{\rho}\tilde{\theta}}{\partial t}\mathbf{u}\right) +
+   \frac{\partial^2 \tilde{\rho}\tilde{\theta}}{\partial t^2}  \equiv \mathcal{R}
+ \end{aligned}}
+\end{equation}
+
+The last term on the right-hand-side requires us to use a two-step time integration method. The Asselin leapfrog scheme seems to be a good candidate for this. At time level $(n-1)$ we are supposed to know every state varialbe, $(\tilde{\rho},\tilde{\theta},\tilde{\pi},\mathbf{u},\theta',\pi')$; At time level $n$ we know everything except $\pi'$, which does not own a prognostic equation. However, the thermodynamic variable Equations (1) and (4) can be integrated foward to yield varialbes at time level $n+1$. Without applying the Asselin filter, we can compute $\partial^2\tilde{\rho}\tilde{\theta}/\partial t^2$ from them, and thereby, using unfiltered variables, we obtain $\mathcal{R}$ at time level $n$. Solving the equation yields $\pi'$ at time level $n$ and allows us to advance the momentum equations. Note that in Durran (2008), there was no the term $\nabla\cdot(\partial\tilde{\rho}\tilde{\theta}/\partial t)\mathbf{u}$. It is unsure whether that is an error of paper or intentionally ignored. 
+
+
+The algorithm can be summarised as follows, in which overline denote Asselin-filtered variable. The integration from $n=0$ to $n=1$ is ignored.
+
+\begin{algorithm}
+\begin{tcolorbox}[parbox=false, width=38em]
+
+    Define model state $\mathbf{\Phi} = (\tilde{\rho},\tilde{\theta},\tilde{\pi},\theta,u,v,w) = (\mathbf{\Theta}, \mathbf{U})$\\[-1ex]         
+    \qquad where $\mathbf{\Theta}$, $\mathbf{U}$ are thermodynamic and momentum state vectors.\\
+    
+    \For{ time level n = 1 ... N } {
+        (i) update thermodynamics: $\mathbf{\Theta}_{n+1} = \overline{\mathbf{\Theta}}_{n-1} + 2\Delta t \mathcal{F}_{\Theta}(\mathbf{\Phi}_n)$,\\[-1ex]
+        \qquad where $\mathcal{F}_{\Theta}$ is the tendendcy function for thermodynamical variables%,\\[-1ex]
+        %\qquad\ and apply the Asselin filter 
+        
+        (ii) compute $\mathcal{R}(\overline{\mathbf{\Theta}}_{n-1}, \mathbf{\Theta}_{n}, \mathbf{\Theta}_{n+1}, \mathbf{U}_n)$ and solve the $\pi'_{n}$ equation\\[-1ex]
+        \qquad where three time levels are needed for calculating $\partial^2\tilde{\rho}\tilde{\theta}/\partial t^2$. 
+        
+        (iii) advance momentum equations: $\mathbf{U}_{n+1} = \overline{\mathbf{U}}_{n-1} + 2\Delta t \mathcal{F}_{U}(\mathbf{\Phi}_n, \pi'_n)$,\\[-1ex]
+        \qquad  where $\mathcal{F}_{U}$ is the tendendcy function for thermodynamical variables,\\[-1ex]
+        
+        (iv) apply the Asselin filter\\[-1ex] 
+\qquad $\overline{\mathbf{U}}_n = \mathbf{U}_n + \gamma (\overline{\mathbf{U}}_{n-1} - 2\mathbf{U}_n + \mathbf{U}_{n+1})$\\[-1ex]    
+\qquad $\overline{\mathbf{\Theta}}_n = \mathbf{\Theta}_n + \gamma (\overline{\mathbf{\Theta}}_{n-1} - 2\mathbf{\Theta}_n + \mathbf{\Theta}_{n+1})$        
+
+        (v) stack and continue: $\overline{\mathbf{\Phi}}_n = (\overline{\mathbf{\Theta}}_n, \overline{\mathbf{U}}_n)$; $\mathbf{\Phi}_{n+1} = (\mathbf{\Theta}_{n+1}, \mathbf{U}_{n+1})$
+        }        
+\end{tcolorbox}    
+\end{algorithm}
+
+
+The adjustment on $\pi'$ with a constant suggested by Durran (2008) or other means shall be applied every step. In real code, the iteration shall be done with a JAX \textsf{scan}.
+
+
+
+  
+
+
+% The exact equation of state is
+% \begin{equation}
+%  \pi = \left( \frac{R}{p_s} \rho \theta\right)^{R/c_v}
+% \end{equation}
+% 
+% which implies that 
+% \begin{equation}
+%  \frac{c_v}{R\pi}\frac{D\pi}{D t} = \frac{1}{\rho}\frac{D \rho}{D t} + \frac{1}{\theta}\frac{D \theta}{D t}
+% \end{equation}
+% Uising the exact masscontinuity and thermodynamic equations, the preceding equation is
+% \begin{equation}
+%   \frac{c_v}{R\pi}\frac{D\pi}{D t} +\nabla\cdot\mathbf{u} = \frac{H_m}{c_p\theta \pi}
+% \end{equation}
+% Multiplying both sides by $\pi$ and decompose thermodynamic variables into reference and perturbation states yields
+% \begin{equation}
+%  \frac{c_v}{R}\frac{D\tilde{\pi}}{D t} + \frac{c_v}{R}\frac{D\pi'}{Dt} + 
+%  \tilde{\pi}\nabla\cdot\mathbf{u} + \pi'\nabla\cdot\mathbf{u}  = 
+%  \frac{H_m}{c_p\tilde{\theta}} - \frac{H_m}{c_p \tilde{\theta}}\frac{\theta'}{\tilde{\theta}}
+% \end{equation}
+% Because of the equation of state for reference state and Equation (3)
+% \begin{align*}
+%  \frac{c_v}{R}\frac{D \tilde{\pi}}{D t} + \tilde{\pi}\nabla\cdot\mathbf{u} - \frac{H_m}{c_p \tilde{\theta}} & = 
+%  \tilde{\pi}\left[\frac{c_v}{R}\frac{D\ln\tilde{\pi}}{D t} + \nabla\cdot \mathbf{u} - \frac{H_m}{c_p\tilde{\theta}\tilde{\pi}} \right]\\
+%  & = \tilde{\pi}\left[\frac{D\ln\tilde{\rho}\tilde{\theta}}{D t} + \nabla\cdot \mathbf{u} - \frac{H_m}{c_p\tilde{\theta}\tilde{\pi}} \right] \\
+%  & = \frac{\tilde{\pi}}{\tilde{\rho}\tilde{\theta}} \left[ \frac{D\tilde{\rho}\tilde{\theta}}{D t} + \tilde{\rho}\tilde{\theta}\nabla\cdot\mathbf{u} - \frac{\tilde{\rho}H_m}{c_p\tilde{\pi}} \right] \\
+%  &= \frac{\tilde{\pi}}{\tilde{\rho}\tilde{\theta}} \left[ \frac{\partial\tilde{\rho}\tilde{\theta}}{\partial t} + \nabla\cdot(\tilde{\rho}\tilde{\theta}\mathbf{u}) - \frac{\tilde{\rho}H_m}{c_p\tilde{\pi}} \right] \\
+%  &= 0
+% \end{align*}
+% We can write Equation (12) as
+% \begin{equation}
+%  \tcboxmath{
+%    \frac{D\pi'}{Dt} + \frac{R}{c_v} \pi'\,\nabla\cdot\mathbf{u}  = 
+%  - \frac{R H_m\theta'}{c_v c_p \tilde{\theta}^2}
+%  }
+% \end{equation}
+% 
+% The derivation of the prognostic equation used the exact mass convervation equation. Are we reintroducing sound waves into the system?
+% 
+% In George Bryan's CM1, the equation for $\pi$ is
+% \begin{equation*}
+% \frac{\partial \pi'}{\partial t} + \mathbf{u}\cdot\nabla(\overline{\pi}+\pi') + \frac{R}{c_v}\nabla\cdot\mathbf{u} = 0
+% \end{equation*}
+% where diabatic heating terms have been ignored. The salient difference is that in our Equation (13) there is a $\pi'$ factor multiplied to divergence, which is the key to generating the sound wave. Thus, the sound wave is still filtered.
+% 
+% 
+
+
+%\section*{Option 2}
+% 
+%If we replace $\rho$ by $\tilde{\rho}$ in Equation (9) and (10), we have 
+% \begin{align*}
+% \tilde{\pi} + \pi' &= \left[ \frac{R}{p_s}\tilde{\rho}(\tilde{\theta} + \theta')\right]^{R/c_v}\\
+% & = \left( \frac{R}{P_s}\tilde{\rho}\tilde{\theta}\right)^{R/c_v} \left(1+\frac{\theta'}{\tilde\theta}\right)^{R/c_v}\\
+% &\approx \tilde{\pi} \left( 1 + \frac{R}{c_v}\frac{\theta'}{\tilde{\theta}}\right) \\
+% &= \tilde{\pi}  + \tilde{\pi}\frac{R}{c_v}\frac{\theta'}{\tilde{\theta}} 
+% \end{align*}
+% Therefore, the approximation gives $\pi'$ is 
+% \begin{equation}
+%  \tcboxmath{
+%  \pi' =\tilde{\pi}\frac{R}{c_v}\frac{\theta'}{\tilde{\theta}}
+%  }
+% \end{equation}
+% 
+%This option is appears to be nice but seems hard to fully justify. Option 1 can be justified but aren't we reintroduce sound waves in the system?
+
+\subsection*{References}
+Durran, Dale. (2008). A physically motivated approach for filtering acoustic waves from the equations governing compressible stratified flow. \textit{Journal of Fluid Mechanics}, 601, 365-379. doi:10.1017/S0022112008000608.
+
+
+
+
+
+
+
+
+\end{document}          

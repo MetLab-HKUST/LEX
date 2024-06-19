@@ -29,7 +29,7 @@ def advection_scalar(rho0, scalar, u, v, w, weps, flow_divergence, scalar_sfc_fl
 
     adv_tendency = (scalar_convergence + scalar[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] *
                     flow_divergence[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
-                    ) / rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:]
+                    ) / rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
 
     return adv_tendency
 
@@ -170,7 +170,8 @@ def get_divergence(rho0, u, v, w, x3d4u, y3d4v, z3d4w):
     rho8w_part = 0.5 * (rho0[:, :, 0:-1] + rho0[:, :, 1:])
     rho8u = jnp.concatenate((rho8u_part[-1, :, :], rho8u_part, rho8u_part[0, :, :]), axis=0)  # periodic boundary
     rho8v = jnp.concatenate((rho8v_part[:, -1, :], rho8v_part, rho8v_part[:, 0, :]), axis=1)  # periodic boundary
-    zero4w = jnp.zeros((nl.nx + 2 * nl.ngx, nl.ny + 2 * nl.ngy, 1))
+    w_size_x, w_size_y, _ = rho8w_part.shape
+    zero4w = jnp.zeros((w_size_x, w_size_y, 1))
     rho8w = jnp.concatenate((zero4w, rho8w_part, zero4w), axis=2)
 
     rho_u = rho8u * u
@@ -181,6 +182,23 @@ def get_divergence(rho0, u, v, w, x3d4u, y3d4v, z3d4w):
     div_y = (rho_v[:, 1:, :] - rho_v[:, 0:-1, :]) / (y3d4v[:, 1:, :] - y3d4v[:, 0:-1, :])
     div_z = (rho_w[:, :, 1:] - rho_w[:, :, 0:-1]) / (z3d4w[:, :, 1:] - z3d4w[:, :, 0:-1])
     div_rho_u = div_x + div_y + div_z  # ghost points kept; they are needed for interpolation onto staggered points
+
+    return div_rho_u
+
+
+def get_2d_divergence(rho0, u, v, x3d4u, y3d4v):
+    """ Compute the 2D divergence of (rho0*u, rho0*v) """
+    rho8u_part = 0.5 * (rho0[0:-1, :, :] + rho0[1:, :, :])
+    rho8v_part = 0.5 * (rho0[:, 0:-1, :] + rho0[:, 1:, :])
+    rho8u = jnp.concatenate((rho8u_part[-1, :, :], rho8u_part, rho8u_part[0, :, :]), axis=0)  # periodic boundary
+    rho8v = jnp.concatenate((rho8v_part[:, -1, :], rho8v_part, rho8v_part[:, 0, :]), axis=1)  # periodic boundary
+
+    rho_u = rho8u * u
+    rho_v = rho8v * v
+
+    div_x = (rho_u[1:, :, :] - rho_u[0:-1, :, :]) / (x3d4u[1:, :, :] - x3d4u[0:-1, :, :])
+    div_y = (rho_v[:, 1:, :] - rho_v[:, 0:-1, :]) / (y3d4v[:, 1:, :] - y3d4v[:, 0:-1, :])
+    div_rho_u = div_x + div_y
 
     return div_rho_u
 
