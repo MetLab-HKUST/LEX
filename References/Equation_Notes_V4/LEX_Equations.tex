@@ -126,18 +126,18 @@ The algorithm can be summarised as follows, in which overline denote Asselin-fil
 \begin{tcolorbox}[parbox=false, width=38em]
 
     Define model state $\mathbf{\Phi} = (\tilde{\rho},\tilde{\theta},\tilde{\pi},\theta,u,v,w) = (\mathbf{\Theta}, \mathbf{U})$\\[-1ex]         
-    \qquad where $\mathbf{\Theta}$, $\mathbf{U}$ are thermodynamic and momentum state vectors.\\
+    \qquad where $\mathbf{\Theta}$, $\mathbf{U}$ are thermodynamic and momentum state arrays.\\
     
     \For{ time level n = 1 ... N } {
         (i) update thermodynamics: $\mathbf{\Theta}_{n+1} = \overline{\mathbf{\Theta}}_{n-1} + 2\Delta t \mathcal{F}_{\Theta}(\mathbf{\Phi}_n)$,\\[-1ex]
-        \qquad where $\mathcal{F}_{\Theta}$ is the tendendcy function for thermodynamical variables%,\\[-1ex]
+        \qquad where $\mathcal{F}_{\Theta}$ is the tendency function for thermodynamic variables%,\\[-1ex]
         %\qquad\ and apply the Asselin filter 
         
         (ii) compute $\mathcal{R}(\overline{\mathbf{\Theta}}_{n-1}, \mathbf{\Theta}_{n}, \mathbf{\Theta}_{n+1}, \mathbf{U}_n)$ and solve the $\pi'_{n}$ equation\\[-1ex]
         \qquad where three time levels are needed for calculating $\partial^2\tilde{\rho}\tilde{\theta}/\partial t^2$. 
         
         (iii) advance momentum equations: $\mathbf{U}_{n+1} = \overline{\mathbf{U}}_{n-1} + 2\Delta t \mathcal{F}_{U}(\mathbf{\Phi}_n, \pi'_n)$,\\[-1ex]
-        \qquad  where $\mathcal{F}_{U}$ is the tendendcy function for thermodynamical variables,\\[-1ex]
+        \qquad  where $\mathcal{F}_{U}$ is the tendency function for momentum variables,\\[-1ex]
         
         (iv) apply the Asselin filter\\[-1ex] 
 \qquad $\overline{\mathbf{U}}_n = \mathbf{U}_n + \gamma (\overline{\mathbf{U}}_{n-1} - 2\mathbf{U}_n + \mathbf{U}_{n+1})$\\[-1ex]    

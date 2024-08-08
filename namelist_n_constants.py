@@ -2,6 +2,8 @@
 
 # Time integration
 dt = 10.0    # integration time step
+sprint_n = 60    # dt*sprint_n is the interval of data saving
+asselin_r = 0.2    # r factor in the Asselin filtering
 
 # Grid configuration
 dx = 100.0   # x-direction grid spacing in meters
@@ -31,6 +33,7 @@ Cpvir = Cpwv / Cp - 1.0
 repsm1 = Rv/Rd - 1.0
 lat_vap = 2.501e6    # latent heat of evaporation
 g = 9.80616    # acceleration of gravity
+p00 = 100000.0    # reference surface pressure
 
 # WENO scheme constant
 epsilon = 1.0e-18   # epsilon in WENO advection

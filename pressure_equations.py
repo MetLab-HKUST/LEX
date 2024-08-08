@@ -49,7 +49,7 @@ def laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, pi):
 
 
 def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
-                             rho0_theta0_heating1, rho0_theta0_heating3, rho0_theta0_tend1, rho0_theta0_tend2,
+                             rho0_theta0_heating1, rho0_theta0_heating2, rho0_theta0_tend1, rho0_theta0_tend2,
                              x3d, x3d4u, y3d, y3d4v, z3d4w):
     """ Compute the right hand side of the pressure equation """
     rhs = -get_divergence(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
@@ -69,13 +69,15 @@ def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])
 
-    rhs = rhs - horizontal_laplace_of_pressure(x3d, x3d4u, y3d, y3d4v,
-                                               rtt, pi0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    rhs = rhs - horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v,
+                                                    rtt, pi0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
 
-    # rho0_theta0_heating1 and rho0_theta0_heating3 are the heating tendency term in the rho0*theta0 equation. They are
-    # not just the heating rate, but also include factors rho0, C_p, pi0, i.e. rho0 * H_m / c_p / pi0. 1 and 3 denotes
-    # values at time levels 1 (previous) and 3 (future)
-    rhs = rhs - (rho0_theta0_heating3 - rho0_theta0_heating1) / (2.0 * nl.dt)
+    # rho0_theta0_heating1 and rho0_theta0_heating2 are the heating tendency term in the rho0*theta0 equation. They are
+    # not just the heating rate, but also include factors rho0, C_p, pi0, i.e. rho0 * H_m / c_p / pi0. 1 and 2 denotes
+    # values at time levels 1 (previous) and 2 (now). Ideally we want use heating at level 3 (future), but when cloud
+    # microphysics is included, latent heating depends on vertical velocity, whose level 3 value cannot be obtained
+    # before we solve the Poisson-type pressure equation.
+    rhs = rhs - (rho0_theta0_heating2 - rho0_theta0_heating1) / nl.dt
 
     # rho0_theta0_tend1 and rho0_theta0_tend2 are the tendency for rho0*theta0 for the three time levels,
     # previous->now, now->future
@@ -90,7 +92,7 @@ def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w
     return rhs
 
 
-def horizontal_laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, rtt, pi):
+def horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v, rtt, pi):
     """ Compute the left-hand-side of the pressure equation
 
     rtt: rho_tilde * theta_tilde * theta
@@ -141,7 +143,7 @@ def interpolate_scalar2w(scalar):
 def extrapolate_bottom_top(scalar):
     """ Extrapolate a scalar array to bottom and top w levels
 
-    We use second order Lagrange polynomial for the extrapolation, assuming the input scalar array has not ghost points.
+    We use second order Lagrange polynomial for the extrapolation, assuming the input scalar array has no ghost points.
     """
     # The extrapolation coefficients below assume there is no stretching near the bottom and top levels. They should
     # be adjusted if that is not true.
@@ -168,11 +170,22 @@ def calculate_rtt(rho0_theta0, theta, buoyancy):
     """
     rtt_part = rho0_theta0[:, :, nl.ngz:-nl.ngz] * theta[:, :, nl.ngz:-nl.ngz]
     bottom, top = extrapolate_bottom_top(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * buoyancy / nl.Cp)
-    bottom_x = jnp.concatenate((bottom[-nl.ngx:, :], bottom, bottom[0:nl.ngx, :]), axis=0)
+    bottom_x = jnp.concatenate((bottom[-nl.ngx:, :, 0], bottom[:, :, 0], bottom[0:nl.ngx, :, 0]), axis=0)
     bottom_xy = jnp.concatenate((bottom_x[:, -nl.ngy:], bottom_x, bottom_x[:, 0:nl.ngy]), axis=1)
-    bottom_xy = jnp.reshape(bottom_xy, (nl.nx + 2*nl.ngx, nl.ny + 2*nl.ngy, 1))
-    top_x = jnp.concatenate((top[-nl.ngx:, :], top, top[0:nl.ngx, :]), axis=0)
+    bottom_xy = jnp.reshape(bottom_xy, (nl.nx + 2 * nl.ngx, nl.ny + 2 * nl.ngy, 1))
+    top_x = jnp.concatenate((top[-nl.ngx:, :, 0], top[:, :, 0], top[0:nl.ngx, :, 0]), axis=0)
     top_xy = jnp.concatenate((top_x[:, -nl.ngy:], top_x, top_x[:, 0:nl.ngy]), axis=1)
     top_xy = jnp.reshape(top_xy, (nl.nx + 2 * nl.ngx, nl.ny + 2 * nl.ngy, 1))
     rtt = jnp.concatenate((bottom_xy, rtt_part, top_xy), axis=2)
     return rtt
+
+
+def calculate_buoyancy(theta0, theta_p, qv):
+    """ Calculate buoyancy term """
+    b = nl.g * (theta_p / theta0 + nl.repsm1 * qv)
+    b8w = 0.5 * (b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] +
+                 b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz])
+    zero8w = jnp.zeros((nl.nx, nl.ny))
+    b8w = b8w.at[:, :, 0].set(zero8w)
+    b8w = b8w.at[:, :, -1].set(zero8w)
+    return b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], b8w
