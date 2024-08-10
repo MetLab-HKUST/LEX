@@ -10,9 +10,10 @@ import namelist_n_constants as nl
 
 
 @jax.jit
-def first_step_integration(rho0_theta0_now, rho0_now, theta0_now, theta0_ic, theta_now, qv_now, u_now, v_now, w_now,
-                           pi0_now, pip_now, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w):
+def first_step_integration(phys_ic, grid_ic):
     """ The first step using Euler method """
+    (rho0_theta0_now, rho0_now, theta0_now, theta_now, qv_now, u_now, v_now, w_now, pi0_now, pip_now) = phys_ic
+    (theta0_ic, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf) = grid_ic
     # update rho0*theta0 equation
     heating_now = one.get_heating(theta_now, theta0_ic)
     rho0_theta0_next, rho0_next, theta0_next, pi0_next, rho0_theta0_heating_now, rho0_theta0_tend_now = one.update_rho0_theta0_euler(
@@ -52,22 +53,58 @@ def first_step_integration(rho0_theta0_now, rho0_now, theta0_now, theta0_ic, the
     # cloud variable equations
     qv_next = one.update_qv_euler(rho0_now, qv_now, u_now, v_now, w_now, flow_divergence, evap, x3d4u, y3d4v, z3d4w)
 
-    return (rho0_theta0_next, rho0_next, theta0_next, pi0_next, rho0_theta0_heating_now, rho0_theta0_tend_now,
-            tau_x, tau_y, sen, evap, t_ref, q_ref, u10n, theta_next, qv_next, pip_now, pip_const,
-            u_next, v_next, w_next)
+    # Rayleigh damping
+    u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
+    u_next = u_next + u_tend*nl.dt
+    v_next = v_next + v_tend*nl.dt
+    w_next = w_next + w_tend*nl.dt
+    theta_next = theta_next + theta_tend*nl.dt
+
+    # replace 'prev' and 'now' by 'now‘ and 'next'
+    theta_prev = theta_now
+    theta_now = theta_next
+    theta0_prev = theta0_now
+    theta0_now = theta0_next
+    rho0_theta0_prev = rho0_theta0_now
+    rho0_theta0_now = rho0_theta0_next
+    rho0_prev = rho0_now
+    rho0_now = rho0_next
+    rho0_theta0_heating_prev = rho0_theta0_heating_now
+    rho0_theta0_tend_prev = rho0_theta0_tend_now
+    pi0_prev = pi0_now
+    pi0_now = pi0_next
+    pip_prev = pip_now
+    u_prev = u_now
+    u_now = u_next
+    v_prev = v_now
+    v_now = v_next
+    w_prev = w_now
+    w_now = w_next
+    qv_prev = qv_now
+    qv_now = qv_next
+
+    phys_state = (rho0_theta0_prev, rho0_theta0_now, rho0_prev, rho0_now, theta0_prev, theta0_now,
+                  theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
+                  qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
+                  rho0_theta0_heating_prev, rho0_theta0_tend_prev,
+                  pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
+
+    return phys_state
 
 
 @jax.jit
-def leapfrog_sprint(rho0_theta0_prev, rho0_theta0_now, rho0_prev, rho0_now, theta0_prev, theta0_now, theta0_ic,
-                    theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
-                    qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
-                    rho0_theta0_heating_prev, rho0_theta0_tend_prev,
-                    surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w):
+def leapfrog_sprint(phys_state, grid_ic):
     """ Integrate with leapfrog method for sprint_n steps
 
      Here one sprint is a number of consecutive steps, between which we don't need save data to an output file. After
      one sprint, we return to the main program and save data to a file
      """
+    (rho0_theta0_prev, rho0_theta0_now, rho0_prev, rho0_now, theta0_prev, theta0_now,
+        theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
+        qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
+        rho0_theta0_heating_prev, rho0_theta0_tend_prev,
+        pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = phys_state
+    (theta0_ic, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf) = grid_ic
 
     for i in range(nl.sprint_n):
         # update rho0*theta0 equation
@@ -110,9 +147,17 @@ def leapfrog_sprint(rho0_theta0_prev, rho0_theta0_now, rho0_prev, rho0_now, thet
                                                                   adv4u, adv4v, adv4w, fu, fv, b8w, x3d, y3d, z3d)
 
         # cloud variable equations
-        rho_now = one.get_rho(pi0_now, pip_now, theta_now, qv_now)
+        # rho_now = one.get_rho(pi0_now, pip_now, theta_now, qv_now)    # real microphysics may need it
         qv_next = one.update_qv_leapfrog(qv_prev, rho0_now, qv_now, u_now, v_now, w_now, flow_divergence, evap,
                                          x3d4u, y3d4v, z3d4w)
+
+        # Rayleigh damping
+        u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
+        u_next = u_next + u_tend * nl.dt * 2.0
+        v_next = v_next + v_tend * nl.dt * 2.0
+        w_next = w_next + w_tend * nl.dt * 2.0
+        theta_next = theta_next + theta_tend * nl.dt * 2.0
+
         # apply Asselin filter
         u_now, v_now, w_now, rho0_theta0_now, rho0_now, theta0_now, theta_now, qv_now = one.asselin_filter(
                         u_prev, v_prev, w_prev, rho0_theta0_prev, theta_prev, qv_prev,
@@ -140,11 +185,12 @@ def leapfrog_sprint(rho0_theta0_prev, rho0_theta0_now, rho0_prev, rho0_now, thet
         w_now = w_next
         qv_prev = qv_now
         qv_now = qv_next
-        rho_prev = rho_now
     # done with one sprint
 
-    return (rho0_theta0_prev, rho0_theta0_now, rho0_prev, rho0_now, theta0_prev, theta0_now,
-            theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
-            qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
-            rho0_theta0_heating_prev, rho0_theta0_tend_prev,
-            rho_prev, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
+    phys_state = (rho0_theta0_prev, rho0_theta0_now, rho0_prev, rho0_now, theta0_prev, theta0_now,
+                  theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
+                  qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
+                  rho0_theta0_heating_prev, rho0_theta0_tend_prev,
+                  pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
+
+    return phys_state

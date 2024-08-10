@@ -46,9 +46,14 @@ def setup_grid_n_ic(ic_option):
         print("I.C.: undefined option!")
         exit()
 
+    tauh, tauf = setup_damping_tau(z3d, z3d4w)
+
     rho0_theta0 = rho0 * theta0
-    # phys_state_ic: rho0, theta0, rho0*theta0, pi0, pip, theta_p, qv, u, v, w
-    return rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w
+    theta0_ic = theta0
+    # physical state initial condition
+    phys_ic = (rho0_theta0, rho0, theta0, theta, qv, u, v, w, pi0, pip)
+    grid_ic = (theta0_ic, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf)
+    return phys_ic, grid_ic
 
 
 def setup_ic_option1():
