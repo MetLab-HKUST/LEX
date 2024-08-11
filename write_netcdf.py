@@ -12,9 +12,9 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     nc_file.createDimension("x", nl.nx)
     nc_file.createDimension("y", nl.ny)
     nc_file.createDimension("z", nl.nz)
-    nc_file.createDimension("x4u", (nl.nx+1))
-    nc_file.createDimension("y4v", (nl.ny+1))
-    nc_file.createDimension("z4w", (nl.nz+1))
+    nc_file.createDimension("x4u", (nl.nx + 1))
+    nc_file.createDimension("y4v", (nl.ny + 1))
+    nc_file.createDimension("z4w", (nl.nz + 1))
     nc_file.createDimension("time", None)
 
     x_nc = nc_file.createVariable("x", np.float32, ("x",))
@@ -34,19 +34,19 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     itime.long_name = "time (s)"
 
     (rho0_theta0_prev, rho0_theta0_now, rho0_prev, rho0_now, theta0_prev, theta0_now,
-        theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
-        qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
-        rho0_theta0_heating_prev, rho0_theta0_tend_prev,
-        pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = phys_state
+     theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
+     qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
+     rho0_theta0_heating_prev, rho0_theta0_tend_prev,
+     pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = phys_state
     (_, _, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, _, _) = grid_ic
 
-    x_nc = x3d[:, 0, 0]
-    y_nc = y3d[0, :, 0]
-    z_nc = z3d[0, 0, :]
-    x4u_nc = x3d4u[:, 0, 0]
-    y4v_nc = y3d4v[0, :, 0]
-    z4w_nc = z3d4w[0, 0, :]
-    itime = model_time
+    x_nc[:] = x3d[:, 0, 0]
+    y_nc[:] = y3d[0, :, 0]
+    z_nc[:] = z3d[0, 0, :]
+    x4u_nc[:] = x3d4u[:, 0, 0]
+    y4v_nc[:] = y3d4v[0, :, 0]
+    z4w_nc[:] = z3d4w[0, 0, :]
+    itime[:] = model_time
 
     x_size, y_size, z_size = np.shape(rho0_theta0_prev)
     x4u_size, _, _ = np.shape(x3d4u)
@@ -55,79 +55,91 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
 
     rho0_theta0_1 = nc_file.createVariable("rho0_theta0_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     rho0_theta0_1.long_name = "rho0*theta0 for the current time"
-    rho0_theta0_1[:, :, :, :] = np.reshape(rho0_theta0_prev, (1, x_size, y_size, z_size))
+    rho0_theta0_1[:, :, :, :] = np.reshape(rho0_theta0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                           (1, x_size, y_size, z_size))
 
     rho0_theta0_2 = nc_file.createVariable("rho0_theta0_next", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     rho0_theta0_2.long_name = "rho0*theta0 for the next time step"
-    rho0_theta0_2[:, :, :, :] = np.reshape(rho0_theta0_now, (1, x_size, y_size, z_size))
+    rho0_theta0_2[:, :, :, :] = np.reshape(rho0_theta0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                           (1, x_size, y_size, z_size))
 
     theta0_1 = nc_file.createVariable("theta0_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     theta0_1.long_name = "theta0 for the current time"
-    theta0_1[:, :, :, :] = np.reshape(theta0_prev, (1, x_size, y_size, z_size))
+    theta0_1[:, :, :, :] = np.reshape(theta0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                      (1, x_size, y_size, z_size))
 
     theta0_2 = nc_file.createVariable("theta0_next", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     theta0_2.long_name = "theta0 for the next time step"
-    theta0_2[:, :, :, :] = np.reshape(theta0_now, (1, x_size, y_size, z_size))
+    theta0_2[:, :, :, :] = np.reshape(theta0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                      (1, x_size, y_size, z_size))
 
     theta_1 = nc_file.createVariable("theta_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     theta_1.long_name = "theta for the current time"
-    theta_1[:, :, :, :] = np.reshape(theta_prev, (1, x_size, y_size, z_size))
+    theta_1[:, :, :, :] = np.reshape(theta_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                     (1, x_size, y_size, z_size))
 
     theta_2 = nc_file.createVariable("theta_next", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     theta_2.long_name = "theta for the next time step"
-    theta_2[:, :, :, :] = np.reshape(theta_now, (1, x_size, y_size, z_size))
+    theta_2[:, :, :, :] = np.reshape(theta_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                     (1, x_size, y_size, z_size))
 
     pi0_1 = nc_file.createVariable("pi0_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     pi0_1.long_name = "pi0 for the current time"
-    pi0_1[:, :, :, :] = np.reshape(pi0_prev, (1, x_size, y_size, z_size))
+    pi0_1[:, :, :, :] = np.reshape(pi0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                   (1, x_size, y_size, z_size))
 
     pi0_2 = nc_file.createVariable("pi0_next", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     pi0_2.long_name = "pi0 for the next time step"
-    pi0_2[:, :, :, :] = np.reshape(pi0_now, (1, x_size, y_size, z_size))
+    pi0_2[:, :, :, :] = np.reshape(pi0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z_size))
 
     pip_1 = nc_file.createVariable("pip_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     pip_1.long_name = "pip for the current time"
-    pip_1[:, :, :, :] = np.reshape(pip_prev, (1, x_size, y_size, z_size))
+    pip_1[:, :, :, :] = np.reshape(pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                   (1, x_size, y_size, z_size))
 
     qv_1 = nc_file.createVariable("qv_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     qv_1.long_name = "qv for the current time"
-    qv_1[:, :, :, :] = np.reshape(qv_prev, (1, x_size, y_size, z_size))
+    qv_1[:, :, :, :] = np.reshape(qv_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z_size))
 
     qv_2 = nc_file.createVariable("qv_next", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     qv_2.long_name = "qv for the next time step"
-    qv_2[:, :, :, :] = np.reshape(qv_now, (1, x_size, y_size, z_size))
+    qv_2[:, :, :, :] = np.reshape(qv_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z_size))
 
     u_1 = nc_file.createVariable("u_now", np.float32, ("time", "x4u", "y", "z"), fill_value=1.0e36)
     u_1.long_name = "u for the current time"
-    u_1[:, :, :, :] = np.reshape(u_prev, (1, x4u_size, y_size, z_size))
+    u_1[:, :, :, :] = np.reshape(u_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x4u_size, y_size, z_size))
 
     u_2 = nc_file.createVariable("u_next", np.float32, ("time", "x4u", "y", "z"), fill_value=1.0e36)
     u_2.long_name = "u for the next time step"
-    u_2[:, :, :, :] = np.reshape(u_now, (1, x4u_size, y_size, z_size))
-    
+    u_2[:, :, :, :] = np.reshape(u_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x4u_size, y_size, z_size))
+
     v_1 = nc_file.createVariable("v_now", np.float32, ("time", "x", "y4v", "z"), fill_value=1.0e36)
     v_1.long_name = "v for the current time"
-    v_1[:, :, :, :] = np.reshape(v_prev, (1, x_size, y4v_size, z_size))
+    v_1[:, :, :, :] = np.reshape(v_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y4v_size, z_size))
 
     v_2 = nc_file.createVariable("v_next", np.float32, ("time", "x", "y4v", "z"), fill_value=1.0e36)
     v_2.long_name = "v for the next time step"
-    v_2[:, :, :, :] = np.reshape(v_now, (1, x_size, y4v_size, z_size))
-    
+    v_2[:, :, :, :] = np.reshape(v_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y4v_size, z_size))
+
     w_1 = nc_file.createVariable("w_now", np.float32, ("time", "x", "y", "z4w"), fill_value=1.0e36)
     w_1.long_name = "w for the current time"
-    w_1[:, :, :, :] = np.reshape(w_prev, (1, x_size, y_size, z4w_size))
+    w_1[:, :, :, :] = np.reshape(w_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z4w_size))
 
     w_2 = nc_file.createVariable("w_next", np.float32, ("time", "x", "y", "z4w"), fill_value=1.0e36)
     w_2.long_name = "w for the next time step"
-    w_2[:, :, :, :] = np.reshape(w_now, (1, x_size, y_size, z4w_size))
-    
-    rho0_theta0_heating_1 = nc_file.createVariable("rho0_theta0_heating_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    w_2[:, :, :, :] = np.reshape(w_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z4w_size))
+
+    rho0_theta0_heating_1 = nc_file.createVariable("rho0_theta0_heating_now", np.float32, ("time", "x", "y", "z"),
+                                                   fill_value=1.0e36)
     rho0_theta0_heating_1.long_name = "rho0_theta0_heating for the current time"
-    rho0_theta0_heating_1[:, :, :, :] = np.reshape(rho0_theta0_heating_prev, (1, x_size, y_size, z_size))
-    
-    rho0_theta0_tend_1 = nc_file.createVariable("rho0_theta0_tend_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    rho0_theta0_heating_1[:, :, :, :] = np.reshape(
+        rho0_theta0_heating_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z_size))
+
+    rho0_theta0_tend_1 = nc_file.createVariable("rho0_theta0_tend_now", np.float32, ("time", "x", "y", "z"),
+                                                fill_value=1.0e36)
     rho0_theta0_tend_1.long_name = "rho0_theta0_tend for the current time"
-    rho0_theta0_tend_1[:, :, :, :] = np.reshape(rho0_theta0_tend_prev, (1, x_size, y_size, z_size))
+    rho0_theta0_tend_1[:, :, :, :] = np.reshape(rho0_theta0_tend_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                                (1, x_size, y_size, z_size))
 
     pc_1 = nc_file.createVariable("pip_const_now", np.float32, "time", fill_value=1.0e36)
     pc_1.long_name = "pi' correction constant for the current time"
@@ -135,33 +147,32 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
 
     tau_x_1 = nc_file.createVariable("tau_x_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     tau_x_1.long_name = "tau_x for the current time"
-    tau_x_1[:, :, :, :] = np.reshape(tau_x, (1, x_size, y_size))
+    tau_x_1[:, :, :, :] = np.reshape(tau_x[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
 
     tau_y_1 = nc_file.createVariable("tau_y_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     tau_y_1.long_name = "tau_y for the current time"
-    tau_y_1[:, :, :, :] = np.reshape(tau_y, (1, x_size, y_size))
-    
+    tau_y_1[:, :, :, :] = np.reshape(tau_y[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+
     sen_1 = nc_file.createVariable("sen_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     sen_1.long_name = "sensible heat for the current time"
-    sen_1[:, :, :, :] = np.reshape(sen, (1, x_size, y_size))
+    sen_1[:, :, :, :] = np.reshape(sen[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
 
     evap_1 = nc_file.createVariable("evap_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     evap_1.long_name = "evaporation for the current time"
-    evap_1[:, :, :, :] = np.reshape(evap, (1, x_size, y_size))
-    
+    evap_1[:, :, :, :] = np.reshape(evap[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+
     t_ref_1 = nc_file.createVariable("T_ref_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     t_ref_1.long_name = "temperature at reference height (2m) for the current time"
-    t_ref_1[:, :, :, :] = np.reshape(t_ref, (1, x_size, y_size))
-    
+    t_ref_1[:, :, :, :] = np.reshape(t_ref[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+
     q_ref_1 = nc_file.createVariable("q_ref_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     q_ref_1.long_name = "mixing ratio at reference height (2m) for the current time"
-    q_ref_1[:, :, :, :] = np.reshape(q_ref, (1, x_size, y_size))
-    
+    q_ref_1[:, :, :, :] = np.reshape(q_ref[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+
     u10_1 = nc_file.createVariable("u10_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     u10_1.long_name = "wind speed at reference height (10m) for the current time"
-    u10_1[:, :, :, :] = np.reshape(u10n, (1, x_size, y_size))
+    u10_1[:, :, :, :] = np.reshape(u10n[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
 
     nc_file.close()
 
     return filename
-

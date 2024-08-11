@@ -3,22 +3,22 @@
 # Time integration
 dt = 10.0          # one-step integration time step
 sprint_n = 60      # dt*sprint_n is the interval of data saving
-relay_n = 12       # number of sprints, relay_n*sprint_n*dt is the total integration time
+relay_n = 3       # number of sprints, relay_n*sprint_n*dt is the total integration time
 asselin_r = 0.2    # r factor in the Asselin filtering
 
 # Grid configuration
-dx = 100.0   # x-direction grid spacing in meters
-dy = 100.0   # y-direction grid spacing in meters
-dz = 50.0    # z-direction grid spacing in meters
-nx = 100     # number of grid cells in x-direction
-ny = 100     # number of grid cells in y-direction
-nz = 200     # number of grid cells in z-direction
+dx = 400.0   # x-direction grid spacing in meters
+dy = 400.0   # y-direction grid spacing in meters
+dz = 200.0   # z-direction grid spacing in meters
+nx = 64     # number of grid cells in x-direction
+ny = 64     # number of grid cells in y-direction
+nz = 64      # number of grid cells in z-direction
 ngx = 3      # number of ghost points on one side of the x-direction
 ngy = 3      # number of ghost points on one side of the y-direction
 ngz = 1      # number of ghost points on one side of the z-direction
 
 # Environment
-fCor = 0.5e-4    # Coriolis parameter
+fCor = 0.0e-4    # Coriolis parameter
 
 # Initial condition choice
 icOption = 1
