@@ -90,7 +90,7 @@ def update_qv_leapfrog(qv_prev, rho0_now, qv_now, u_now, v_now, w_now, flow_dive
 
 def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
                    rho0_theta0_heating1, rho0_theta0_heating2, rho0_theta0_tend1, rho0_theta0_tend2,
-                   x3d, x3d4u, y3d, y3d4v, z3d4w):
+                   x3d, x3d4u, y3d, y3d4v, z3d, z3d4w):
     """ Solve the Poisson-like equation for pressure perturbations, pi\' (pip) """
     rhs = pres_eqn.rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
                                             rho0_theta0_heating1, rho0_theta0_heating2, rho0_theta0_tend1,
@@ -99,8 +99,10 @@ def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w
 
     tol = 1.0e-6  # the tolerance level needs to be tested and tuned.
     # using previous step pi\' as the first guess x0
-    pip = jax.scipy.sparse.linalg.gmres(pres_eqn.laplace_of_pressure, rhs, x0=pip_prev, tol=tol, maxiter=100,
-                                        solve_method='incremental')
+    pip = jax.scipy.sparse.linalg.gmres(
+        lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
+        rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+        tol=tol, maxiter=100, solve_method='incremental')
     return pip
 
 
@@ -160,11 +162,11 @@ def asselin_filter(u_prev, v_prev, w_prev, rho0_theta0_prev, theta_prev, qv_prev
     qv_now_f = (1.0 - 2.0 * nl.asselin_r) * qv_now + nl.asselin_r * (qv_prev + qv_next)
 
     pi0_now_f = (rho0_theta0_now_f * nl.Rd / nl.p00) ** (nl.Rd / nl.Cv)
-    pi0_now_f8w = pres_eqn.interpolate_scalar2w(pi0_now_f)
+    pi0_now_f8w = pres_eqn.interpolate_scalar2w(pi0_now_f[:, :, nl.ngz:-nl.ngz])
     d_pi0_dz = (pi0_now_f8w[:, :, 1:] - pi0_now_f8w[:, :, 0:-1]) / (
             z3d4w[:, :, nl.ngz + 1:-nl.ngz] - z3d4w[:, :, nl.ngz:-(nl.ngz + 1)])
     theta0_now_f_part = -nl.g / nl.Cp / d_pi0_dz
-    x_size, y_size, z_size = theta0_now_f_part.shape
+    x_size, y_size, _ = theta0_now_f_part.shape
     bottom = jnp.reshape(theta0_now_f_part[:, :, 0], (x_size, y_size, 1))
     top = jnp.reshape(theta0_now_f_part[:, :, -1], (x_size, y_size, 1))
     theta0_now_f = jnp.concatenate((bottom, theta0_now_f_part, top), axis=2)
@@ -223,8 +225,8 @@ def get_heating(theta, theta0_ic):
 def space_integration(scalar, x3d4u, y3d4v, z3d4w):
     """ Compute the spatial integration of a scalar """
     dx = x3d4u[nl.ngx+1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] - x3d4u[nl.ngx:-(nl.ngx+1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
-    dy = y3d4v[nl.ngx:-nl.ngx, nl.ngy+1:-nl.ngy, nl.ngz:-nl.ngz] - x3d4u[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy-1), nl.ngz:-nl.ngz]
-    dz = z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] - x3d4u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz+1)]
+    dy = y3d4v[nl.ngx:-nl.ngx, nl.ngy+1:-nl.ngy, nl.ngz:-nl.ngz] - y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy+1), nl.ngz:-nl.ngz]
+    dz = z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] - z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz+1)]
     return jnp.sum(scalar[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * dx * dy * dz)
 
 
@@ -241,6 +243,9 @@ def padding3_array(arr):
     """ Padding an array with three ghost points on each side """
     arr_x = jnp.concatenate((arr[-nl.ngx:, :, :], arr, arr[0:nl.ngx, :, :]), axis=0)
     arr_xy = jnp.concatenate((arr_x[:, -nl.ngx:, :], arr_x, arr_x[:, 0:nl.ngx, :]), axis=1)
-    arr_xyz = jnp.concatenate((arr_xy[:, :, 0], arr_xy, arr_xy[:, :, -1]), axis=2)
+    x_size, y_size, _ = jnp.shape(arr_xy)
+    bottom = jnp.reshape(arr_xy[:, :, 0], (x_size, y_size, 1))
+    top = jnp.reshape(arr_xy[:, :, -1], (x_size, y_size, 1))
+    arr_xyz = jnp.concatenate((bottom, arr_xy, top), axis=2)
     # The ghost points at the bottom and top are more like placeholders, without practical use for now.
     return arr_xyz

@@ -30,7 +30,7 @@ def pressure_gradient_force(pi0, pip, theta, x3d, y3d, z3d):
               z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz])
     pres_grad4w = -nl.Cp * 0.5 * (theta[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] +
                                   theta[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]) * dpi_dz
-    pres_grad_zeros = jnp.zeros((nl.nx, nl.ny, 1))  # dummy array with 0s
+    pres_grad_zeros = jnp.zeros((nl.nx, nl.ny))  # dummy array with 0s
     pres_grad4w = pres_grad4w.at[:, :, 0].set(pres_grad_zeros)
     pres_grad4w = pres_grad4w.at[:, :, -1].set(pres_grad_zeros)
     return pres_grad4u, pres_grad4v, pres_grad4w

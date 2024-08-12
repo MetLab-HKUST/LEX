@@ -10,13 +10,15 @@ import time
 
 # setup initial conditions
 startTime = time.time()
-(physIC, gridIC) = setl.setup_grid_n_ic(nl.icOption)
+physIC, gridIC = setl.setup_grid_n_ic(nl.icOption)
 timeSetup = time.time() - startTime
+print("Setting up I.C.")
 
 # do first-step integration
 wallTime = time.time()
 physState = sp.first_step_integration(physIC, gridIC)
 time1stStep = time.time() - wallTime
+print("First step integration done.")
 
 # save first two time slices
 modelTime = 0.0
@@ -28,6 +30,7 @@ timeWrite = time.time() - wallTime
 time1stSprint = 0.0
 timeSprints = 0.0
 for i in range(nl.relay_n):
+    print("Sprint #%0.4i" % (i+1))
     wallTime = time.time()
     physState = sp.leapfrog_sprint(physState, gridIC)
     if i > 0:
@@ -43,9 +46,9 @@ for i in range(nl.relay_n):
 endTime = time.time()
 timeTotal = endTime - startTime
 
-print("Completion of integration\n")
-print("-------------------------\n")
-print("Timing statistics\n")
+print("Completion of integration")
+print("-------------------------")
+print("Timing statistics")
 print("***")
 print("Setup:             %10.6f" % timeSetup)
 print("1st Step:          %10.6f" % time1stStep)

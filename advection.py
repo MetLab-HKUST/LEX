@@ -40,7 +40,12 @@ def advection_u(rho0, u, v, w, weps, flow_divergence, u_sfc_flux, x3d, y3d4v, z3
     3rd-order WENO is used to compute the vertical flux, and 5th-order WENO is used to compute the horizontal fluxes.
     """
     flux_z = vertical_flux_u(weps, rho0, w, u)
-    flux_z = flux_z.at[:, :, 0].set(u_sfc_flux)  # set lower boundary condition
+    _, flx_size_y = jnp.shape(u_sfc_flux)
+    tau_x_west = jnp.reshape(u_sfc_flux[-1, :], (1, flx_size_y))
+    tau_x_east = jnp.reshape(u_sfc_flux[0, :], (1, flx_size_y))
+    tau_x = jnp.concatenate((tau_x_west, u_sfc_flux, tau_x_east), axis=0)
+    tau_x8u = 0.5 * (tau_x[0:-1, :] + tau_x[1:, :])
+    flux_z = flux_z.at[:, :, 0].set(tau_x8u)  # set lower boundary condition
 
     flux_x, flux_y = horizontal_flux_u(weps, rho0, u, v)
 
@@ -75,7 +80,12 @@ def advection_v(rho0, u, v, w, weps, flow_divergence, v_sfc_flux, x3d4u, y3d, z3
     3rd-order WENO is used to compute the vertical flux, and 5th-order WENO is used to compute the horizontal fluxes.
     """
     flux_z = vertical_flux_v(weps, rho0, w, v)
-    flux_z = flux_z.at[:, :, 0].set(v_sfc_flux)  # set lower boundary condition
+    flx_size_x, _ = jnp.shape(v_sfc_flux)
+    tau_y_south = jnp.reshape(v_sfc_flux[:, -1], (flx_size_x, 1))
+    tau_y_north = jnp.reshape(v_sfc_flux[:, 0], (flx_size_x, 1))
+    tau_y = jnp.concatenate((tau_y_south, v_sfc_flux, tau_y_north), axis=1)
+    tau_y8v = 0.5 * (tau_y[:, 0:-1] + tau_y[:, 1:])
+    flux_z = flux_z.at[:, :, 0].set(tau_y8v)  # set lower boundary condition
 
     flux_x, flux_y = horizontal_flux_v(weps, rho0, u, v)
 
@@ -168,8 +178,14 @@ def get_divergence(rho0, u, v, w, x3d4u, y3d4v, z3d4w):
     rho8u_part = 0.5 * (rho0[0:-1, :, :] + rho0[1:, :, :])
     rho8v_part = 0.5 * (rho0[:, 0:-1, :] + rho0[:, 1:, :])
     rho8w_part = 0.5 * (rho0[:, :, 0:-1] + rho0[:, :, 1:])
-    rho8u = jnp.concatenate((rho8u_part[-1, :, :], rho8u_part, rho8u_part[0, :, :]), axis=0)  # periodic boundary
-    rho8v = jnp.concatenate((rho8v_part[:, -1, :], rho8v_part, rho8v_part[:, 0, :]), axis=1)  # periodic boundary
+    _, u_size_y, u_size_z = rho8u_part.shape
+    v_size_x, _, v_size_z = rho8v_part.shape
+    west = jnp.reshape(rho8u_part[-1, :, :], (1, u_size_y, u_size_z))
+    east = jnp.reshape(rho8u_part[0, :, :], (1, u_size_y, u_size_z))
+    rho8u = jnp.concatenate((west, rho8u_part, east), axis=0)  # periodic boundary
+    south = jnp.reshape(rho8v_part[:, -1, :], (v_size_x, 1, v_size_z))
+    north = jnp.reshape(rho8v_part[:, 0, :], (v_size_x, 1, v_size_z))
+    rho8v = jnp.concatenate((south, rho8v_part, north), axis=1)  # periodic boundary
     w_size_x, w_size_y, _ = rho8w_part.shape
     zero4w = jnp.zeros((w_size_x, w_size_y, 1))
     rho8w = jnp.concatenate((zero4w, rho8w_part, zero4w), axis=2)
@@ -190,9 +206,14 @@ def get_2d_divergence(rho0, u, v, x3d4u, y3d4v):
     """ Compute the 2D divergence of (rho0*u, rho0*v) """
     rho8u_part = 0.5 * (rho0[0:-1, :, :] + rho0[1:, :, :])
     rho8v_part = 0.5 * (rho0[:, 0:-1, :] + rho0[:, 1:, :])
-    rho8u = jnp.concatenate((rho8u_part[-1, :, :], rho8u_part, rho8u_part[0, :, :]), axis=0)  # periodic boundary
-    rho8v = jnp.concatenate((rho8v_part[:, -1, :], rho8v_part, rho8v_part[:, 0, :]), axis=1)  # periodic boundary
-
+    _, u_size_y, u_size_z = rho8u_part.shape
+    v_size_x, _, v_size_z = rho8v_part.shape
+    west = jnp.reshape(rho8u_part[-1, :, :], (1, u_size_y, u_size_z))
+    east = jnp.reshape(rho8u_part[0, :, :], (1, u_size_y, u_size_z))
+    rho8u = jnp.concatenate((west, rho8u_part, east), axis=0)  # periodic boundary
+    south = jnp.reshape(rho8v_part[:, -1, :], (v_size_x, 1, v_size_z))
+    north = jnp.reshape(rho8v_part[:, 0, :], (v_size_x, 1, v_size_z))
+    rho8v = jnp.concatenate((south, rho8v_part, north), axis=1)  # periodic boundary
     rho_u = rho8u * u
     rho_v = rho8v * v
 

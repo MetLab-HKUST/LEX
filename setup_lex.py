@@ -13,7 +13,7 @@ def setup_grid_n_ic(ic_option):
     # Coordinates for cell center variables
     x1d = np.linspace(0.0 - (nl.ngx - 0.5) * nl.dx, (nl.nx + nl.ngx - 0.5) * nl.dx, nl.nx + 2 * nl.ngx)
     y1d = np.linspace(0.0 - (nl.ngy - 0.5) * nl.dy, (nl.ny + nl.ngy - 0.5) * nl.dy, nl.ny + 2 * nl.ngy)
-    z1d = np.linspace(0.0 - (nl.ngz - 0.5) * nl.dx, (nl.nz + nl.ngz - 0.5) * nl.dz, nl.nz + 2 * nl.ngz)
+    z1d = np.linspace(0.0 - (nl.ngz - 0.5) * nl.dz, (nl.nz + nl.ngz - 0.5) * nl.dz, nl.nz + 2 * nl.ngz)
     x3d, y3d, z3d = np.meshgrid(x1d, y1d, z1d, indexing="ij")
     # Coordinates for u point variables
     x1d4u = np.linspace(0.0 - nl.ngx * nl.dx, (nl.nx + nl.ngx) * nl.dx, nl.nx + 1 + 2 * nl.ngx)
@@ -22,7 +22,7 @@ def setup_grid_n_ic(ic_option):
     y1d4v = np.linspace(0.0 - nl.ngy * nl.dy, (nl.ny + nl.ngy) * nl.dy, nl.ny + 1 + 2 * nl.ngy)
     _, y3d4v, _ = np.meshgrid(x1d, y1d4v, z1d, indexing="ij")
     # Coordinates for w point variables
-    z1d4w = np.linspace(0.0 - nl.ngz * nl.dz, (nl.nz + nl.ngz) * nl.dz, nl.nz + 1 + 2 * nl.ngy)
+    z1d4w = np.linspace(0.0 - nl.ngz * nl.dz, (nl.nz + nl.ngz) * nl.dz, nl.nz + 1 + 2 * nl.ngz)
     _, _, z3d4w = np.meshgrid(x1d, y1d, z1d4w, indexing="ij")
 
     # Allocate all physics state variables for I.C.
@@ -80,9 +80,9 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, su
     rho0 = rho0.at[:].set(rho0_theta0 / theta0)
 
     # initial center location of the warm bubble
-    xc = 0.0
-    yc = 0.0
-    zc = 3.0
+    xc = 12800.0
+    yc = 12800.0
+    zc = 3000.0
     # initial bubble radius
     xr = 2000.0
     yr = 2000.0
@@ -105,8 +105,9 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, su
 
 def setup_damping_tau(z3d, z3d4w):
     """ Set up the ramp-up factor for Rayleigh damping """
-    tauh = 0.5 * (1.0 - np.cos(np.pi * (z3d - nl.z_damping) / (z3d4w[:, :, -1] - nl.z_damping)))
-    tauf = 0.5 * (1.0 - np.cos(np.pi * (z3d4w - nl.z_damping) / (z3d4w[:, :, -1] - nl.z_damping)))
+    damp_depth = np.reshape(z3d4w[:, :, -1] - nl.z_damping, (nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, 1))
+    tauh = 0.5 * (1.0 - np.cos(np.pi * (z3d - nl.z_damping) / damp_depth))
+    tauf = 0.5 * (1.0 - np.cos(np.pi * (z3d4w - nl.z_damping) / damp_depth))
     tauh = np.where(z3d <= nl.z_damping, 0.0, tauh)
     tauf = np.where(z3d4w <= nl.z_damping, 0.0, tauf)
     return tauh, tauf
@@ -117,7 +118,7 @@ def rslf(p, t):
     # from Bolton (1980, MWR)
     esl = 611.2 * jnp.exp(17.67 * (t - 273.15) / (t - 29.65))
     # fix for very cold temps:
-    esl = jnp.min(esl, p*0.5)
+    esl = jnp.where(esl>p*0.5, p*0.5, esl)
     r_sat = nl.eps * esl / (p - esl)
 
     return r_sat

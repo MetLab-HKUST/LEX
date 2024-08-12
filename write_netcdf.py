@@ -37,21 +37,21 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
      theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
      qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
      rho0_theta0_heating_prev, rho0_theta0_tend_prev,
-     pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = phys_state
+     info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = phys_state
     (_, _, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, _, _) = grid_ic
 
-    x_nc[:] = x3d[:, 0, 0]
-    y_nc[:] = y3d[0, :, 0]
-    z_nc[:] = z3d[0, 0, :]
-    x4u_nc[:] = x3d4u[:, 0, 0]
-    y4v_nc[:] = y3d4v[0, :, 0]
-    z4w_nc[:] = z3d4w[0, 0, :]
+    x_nc[:] = x3d[nl.ngx:-nl.ngx, 0, 0]
+    y_nc[:] = y3d[0, nl.ngy:-nl.ngy, 0]
+    z_nc[:] = z3d[0, 0, nl.ngz:-nl.ngz]
+    x4u_nc[:] = x3d4u[nl.ngx:-nl.ngx, 0, 0]
+    y4v_nc[:] = y3d4v[0, nl.ngy:-nl.ngy, 0]
+    z4w_nc[:] = z3d4w[0, 0, nl.ngz:-nl.ngz]
     itime[:] = model_time
 
-    x_size, y_size, z_size = np.shape(rho0_theta0_prev)
-    x4u_size, _, _ = np.shape(x3d4u)
-    _, y4v_size, _ = np.shape(y3d4v)
-    _, _, z4w_size = np.shape(z3d4w)
+    x_size, y_size, z_size = np.shape(rho0_theta0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    x4u_size, _, _ = np.shape(x3d4u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    _, y4v_size, _ = np.shape(y3d4v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    _, _, z4w_size = np.shape(z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
 
     rho0_theta0_1 = nc_file.createVariable("rho0_theta0_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     rho0_theta0_1.long_name = "rho0*theta0 for the current time"
@@ -132,46 +132,48 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     rho0_theta0_heating_1 = nc_file.createVariable("rho0_theta0_heating_now", np.float32, ("time", "x", "y", "z"),
                                                    fill_value=1.0e36)
     rho0_theta0_heating_1.long_name = "rho0_theta0_heating for the current time"
-    rho0_theta0_heating_1[:, :, :, :] = np.reshape(
-        rho0_theta0_heating_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z_size))
+    rho0_theta0_heating_1[:, :, :, :] = np.reshape(rho0_theta0_heating_prev, (1, x_size, y_size, z_size))
 
     rho0_theta0_tend_1 = nc_file.createVariable("rho0_theta0_tend_now", np.float32, ("time", "x", "y", "z"),
                                                 fill_value=1.0e36)
     rho0_theta0_tend_1.long_name = "rho0_theta0_tend for the current time"
-    rho0_theta0_tend_1[:, :, :, :] = np.reshape(rho0_theta0_tend_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                                                (1, x_size, y_size, z_size))
+    rho0_theta0_tend_1[:, :, :, :] = np.reshape(rho0_theta0_tend_prev, (1, x_size, y_size, z_size))
+
+    info_1 = nc_file.createVariable("info_now", np.float32, "time", fill_value=1.0e36)
+    info_1.long_name = "exit code of the Poisson-like equation solver"
+    info_1[:] = info
 
     pc_1 = nc_file.createVariable("pip_const_now", np.float32, "time", fill_value=1.0e36)
     pc_1.long_name = "pi' correction constant for the current time"
-    pc_1[:, :, :, :] = pip_const
+    pc_1[:] = pip_const
 
     tau_x_1 = nc_file.createVariable("tau_x_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     tau_x_1.long_name = "tau_x for the current time"
-    tau_x_1[:, :, :, :] = np.reshape(tau_x[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+    tau_x_1[:, :, :] = np.reshape(tau_x, (1, x_size, y_size))
 
     tau_y_1 = nc_file.createVariable("tau_y_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     tau_y_1.long_name = "tau_y for the current time"
-    tau_y_1[:, :, :, :] = np.reshape(tau_y[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+    tau_y_1[:, :, :] = np.reshape(tau_y, (1, x_size, y_size))
 
     sen_1 = nc_file.createVariable("sen_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     sen_1.long_name = "sensible heat for the current time"
-    sen_1[:, :, :, :] = np.reshape(sen[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+    sen_1[:, :, :] = np.reshape(sen, (1, x_size, y_size))
 
     evap_1 = nc_file.createVariable("evap_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     evap_1.long_name = "evaporation for the current time"
-    evap_1[:, :, :, :] = np.reshape(evap[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+    evap_1[:, :, :] = np.reshape(evap, (1, x_size, y_size))
 
     t_ref_1 = nc_file.createVariable("T_ref_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     t_ref_1.long_name = "temperature at reference height (2m) for the current time"
-    t_ref_1[:, :, :, :] = np.reshape(t_ref[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+    t_ref_1[:, :, :] = np.reshape(t_ref, (1, x_size, y_size))
 
     q_ref_1 = nc_file.createVariable("q_ref_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     q_ref_1.long_name = "mixing ratio at reference height (2m) for the current time"
-    q_ref_1[:, :, :, :] = np.reshape(q_ref[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+    q_ref_1[:, :, :] = np.reshape(q_ref, (1, x_size, y_size))
 
     u10_1 = nc_file.createVariable("u10_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
     u10_1.long_name = "wind speed at reference height (10m) for the current time"
-    u10_1[:, :, :, :] = np.reshape(u10n[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy], (1, x_size, y_size))
+    u10_1[:, :, :] = np.reshape(u10n, (1, x_size, y_size))
 
     nc_file.close()
 

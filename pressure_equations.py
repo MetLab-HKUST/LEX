@@ -85,7 +85,9 @@ def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w
     rhs = rhs + get_divergence(rho0_theta0_tend, u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                               x3d4u, y3d4v, z3d4w)
+                               x3d4u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                               y3d4v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                               z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
 
     rhs = rhs + (rho0_theta0_tend2 - rho0_theta0_tend1) / nl.dt
 
@@ -125,9 +127,12 @@ def horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v, rtt, pi):
 
 def padding_array(arr):
     """ Padding an array with one ghost point on each side """
-    arr_x = jnp.concatenate((arr[-1, :, :], arr, arr[0, :, :]), axis=0)
-    arr_xy = jnp.concatenate((arr_x[:, -1, :], arr_x, arr_x[:, 0, :]), axis=1)
-    arr_xyz = jnp.concatenate((arr_xy[:, :, 0], arr_xy, arr_xy[:, :, -1]), axis=2)
+    arr_x = jnp.concatenate((arr[-1:, :, :], arr, arr[0:1, :, :]), axis=0)
+    arr_xy = jnp.concatenate((arr_x[:, -1:, :], arr_x, arr_x[:, 0:1, :]), axis=1)
+    x_size, y_size, _ = jnp.shape(arr_xy)
+    bottom = jnp.reshape(arr_xy[:, :, 0], (x_size, y_size, 1))
+    top = jnp.reshape(arr_xy[:, :, -1], (x_size, y_size, 1))
+    arr_xyz = jnp.concatenate((bottom, arr_xy, top), axis=2)
     # The ghost points at the bottom and top are more like placeholders.
     return arr_xyz
 

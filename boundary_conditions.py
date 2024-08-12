@@ -22,7 +22,7 @@ def atm_ocn_flux(z_bottom, u_bottom, v_bottom, theta_bottom, q_bottom, rho_botto
 
     # first estimate of Z/L and u_star, t_star, and q_star
     rdn = jnp.sqrt(cdn(v_mag))
-    rhn = jax.lax.select(delta_t > 0.0, 0.018, 0.0327)
+    rhn = jnp.where(delta_t > 0.0, 0.018, 0.0327)
     ren = 0.0346
     u_star = rdn * v_mag
     t_star = rhn * delta_t
@@ -41,7 +41,7 @@ def atm_ocn_flux(z_bottom, u_bottom, v_bottom, theta_bottom, q_bottom, rho_botto
         # update transfer coefficients at 10m and neutral stability
         rdn = jnp.sqrt(cdn(u10n))
         ren = 0.0346
-        rhn = jax.lax.select(hol > 0.0, 0.018, 0.0327)
+        rhn = jnp.where(hol > 0.0, 0.018, 0.0327)
         # shift all coefficients to measurement height and stability
         rd = rdn / (1.0 + rdn / nl.Karman * (alz - psi_mh))
         rh = rhn / (1.0 + rhn / nl.Karman * (alz - psi_xh))
@@ -134,7 +134,7 @@ def rayleigh_damping(tauh, tauf, u, v, w, theta):
                                  w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
                                  )
     # The damping here assume the base state has w0 = 0
-    theta_avg = jnp.mean(theta, axis=(0, 1), keepdims=True)
+    theta_avg = jnp.mean(theta[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], axis=(0, 1), keepdims=True)
     theta_tendency = -nl.rd_alpha * tauh[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * (
             theta[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] - theta_avg)
     # Damping towards the horizontal mean of theta

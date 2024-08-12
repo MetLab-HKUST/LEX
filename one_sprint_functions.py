@@ -39,14 +39,17 @@ def first_step_integration(phys_ic, grid_ic):
     adv4u, adv4v, adv4w = one.prep_momentum_eqn(rho0_now, u_now, v_now, w_now, flow_divergence, tau_x, tau_y,
                                                 x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
     fu, fv = pres_grad.calculate_coriolis_force(u_now, v_now)
-    pip_now = one.solve_pres_eqn(pip_now, rho0_theta0_now, pi0_now, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
-                                 fu, fv, buoyancy, rho0_theta0_heating_now, rho0_theta0_heating_now,
-                                 rho0_theta0_tend_now, rho0_theta0_tend_now, x3d, x3d4u, y3d, y3d4v, z3d4w)
+    pip_now, info = one.solve_pres_eqn(pip_now, rho0_theta0_now, pi0_now, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
+                                       fu, fv, buoyancy, rho0_theta0_heating_now, rho0_theta0_heating_now,
+                                       rho0_theta0_tend_now, rho0_theta0_tend_now, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
+
+    pip_now = one.padding3_array(pip_now)
     pip_const = one.correct_pip_constant(rho0_now, theta0_now, pi0_now, rho0_next, theta0_next, pi0_next,
                                          pi0_now, pip_now, x3d4u, y3d4v, z3d4w)
     # pip_const is the correction constant for conserving energy, based on Durran 2008.
     pip_now = pip_now + pip_const
 
+    
     # update momentum equations
     u_next, v_next, w_next = one.update_momentum_eqn_euler(u_now, v_now, w_now, pi0_now, pip_now, theta_now,
                                                            adv4u, adv4v, adv4w, fu, fv, b8w, x3d, y3d, z3d)
@@ -55,10 +58,10 @@ def first_step_integration(phys_ic, grid_ic):
 
     # Rayleigh damping
     u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
-    u_next = u_next + u_tend*nl.dt
-    v_next = v_next + v_tend*nl.dt
-    w_next = w_next + w_tend*nl.dt
-    theta_next = theta_next + theta_tend*nl.dt
+    u_next = u_next + one.padding3_array(u_tend*nl.dt)
+    v_next = v_next + one.padding3_array(v_tend*nl.dt)
+    w_next = w_next + one.padding3_array(w_tend*nl.dt)
+    theta_next = theta_next + one.padding3_array(theta_tend*nl.dt)
 
     # replace 'prev' and 'now' by 'now‘ and 'next'
     theta_prev = theta_now
@@ -87,7 +90,7 @@ def first_step_integration(phys_ic, grid_ic):
                   theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
                   qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
                   rho0_theta0_heating_prev, rho0_theta0_tend_prev,
-                  pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
+                  info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
 
     return phys_state
 
@@ -103,7 +106,7 @@ def leapfrog_sprint(phys_state, grid_ic):
         theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
         qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
         rho0_theta0_heating_prev, rho0_theta0_tend_prev,
-        pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = phys_state
+        info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = phys_state
     (theta0_ic, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf) = grid_ic
 
     for i in range(nl.sprint_n):
@@ -134,14 +137,16 @@ def leapfrog_sprint(phys_state, grid_ic):
         adv4u, adv4v, adv4w = one.prep_momentum_eqn(rho0_now, u_now, v_now, w_now, flow_divergence, tau_x, tau_y,
                                                     x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
         fu, fv = pres_grad.calculate_coriolis_force(u_now, v_now)
-        pip_now = one.solve_pres_eqn(pip_prev, rho0_theta0_now, pi0_now, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
-                                     fu, fv, buoyancy, rho0_theta0_heating_prev, rho0_theta0_heating_now,
-                                     rho0_theta0_tend_prev, rho0_theta0_tend_now, x3d, x3d4u, y3d, y3d4v, z3d4w)
+        pip_now, info = one.solve_pres_eqn(pip_prev, rho0_theta0_now, pi0_now, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
+                                           fu, fv, buoyancy, rho0_theta0_heating_prev, rho0_theta0_heating_now,
+                                           rho0_theta0_tend_prev, rho0_theta0_tend_now, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
+
+        pip_now = one.padding3_array(pip_now)
         pip_const = one.correct_pip_constant(rho0_prev, theta0_prev, pi0_prev, rho0_next, theta0_next, pi0_next,
                                              pi0_now, pip_now, x3d4u, y3d4v, z3d4w)
         # pip_const is the correction constant for conserving energy, based on Durran 2008.
         pip_now = pip_now + pip_const
-
+    
         # update momentum equations
         u_next, v_next, w_next = one.update_momentum_eqn_leapfrog(u_prev, v_prev, w_prev, pi0_now, pip_now, theta_now,
                                                                   adv4u, adv4v, adv4w, fu, fv, b8w, x3d, y3d, z3d)
@@ -153,10 +158,10 @@ def leapfrog_sprint(phys_state, grid_ic):
 
         # Rayleigh damping
         u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
-        u_next = u_next + u_tend * nl.dt * 2.0
-        v_next = v_next + v_tend * nl.dt * 2.0
-        w_next = w_next + w_tend * nl.dt * 2.0
-        theta_next = theta_next + theta_tend * nl.dt * 2.0
+        u_next = u_next + one.padding3_array(u_tend * nl.dt * 2.0)
+        v_next = v_next + one.padding3_array(v_tend * nl.dt * 2.0)
+        w_next = w_next + one.padding3_array(w_tend * nl.dt * 2.0)
+        theta_next = theta_next + one.padding3_array(theta_tend * nl.dt * 2.0)
 
         # apply Asselin filter
         u_now, v_now, w_now, rho0_theta0_now, rho0_now, theta0_now, theta_now, qv_now = one.asselin_filter(
@@ -191,6 +196,6 @@ def leapfrog_sprint(phys_state, grid_ic):
                   theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
                   qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
                   rho0_theta0_heating_prev, rho0_theta0_tend_prev,
-                  pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
+                  info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
 
     return phys_state
