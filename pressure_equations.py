@@ -80,7 +80,6 @@ def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w
     rhs = rhs - (rho0_theta0_heating2 - rho0_theta0_heating1) / nl.dt
 
     # rho0_theta0_tend1 and rho0_theta0_tend2 are the tendency for rho0*theta0 for the three time levels,
-    # previous->now, now->future
     rho0_theta0_tend = 0.5 * (rho0_theta0_tend1 + rho0_theta0_tend2)
     rhs = rhs + get_divergence(rho0_theta0_tend, u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
@@ -187,7 +186,8 @@ def calculate_rtt(rho0_theta0, theta, buoyancy):
 
 def calculate_buoyancy(theta0, theta_p, qv):
     """ Calculate buoyancy term """
-    b = nl.g * (theta_p / theta0 + nl.repsm1 * qv)
+    ###### b = nl.g * (theta_p / theta0 + nl.repsm1 * qv)
+    b = nl.g * (theta_p / theta0)    # ignore water vapor
     b8w = 0.5 * (b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] +
                  b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz])
     zero8w = jnp.zeros((nl.nx, nl.ny))

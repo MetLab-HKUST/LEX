@@ -149,7 +149,7 @@ def advection_w(rho0, u, v, w, weps, flow_divergence, x3d4u, y3d4v, z3d):
     return adv_tendency
 
 
-def rho0_theta0_flux_convergence(rho0_theta0, u, v, w, weps, x3d4u, y3d4v, z3d4w):
+def rho0_theta0_flux_convergence(rho0_theta0, sen, u, v, w, weps, x3d4u, y3d4v, z3d4w):
     """ Compute the convergence of rho0*theta0 flux
 
     This term is for the pseudo-density equation, thus it does not use the generic scalar advection function.
@@ -157,6 +157,7 @@ def rho0_theta0_flux_convergence(rho0_theta0, u, v, w, weps, x3d4u, y3d4v, z3d4w
     """
     rho0_ones = np.ones((nl.nx + 2 * nl.ngx, nl.ny + 2 * nl.ngy, nl.nz + 2 * nl.ngz))  # dummy array with 1s
     flux_z = vertical_flux_scalar(weps, rho0_ones, w, rho0_theta0)
+    flux_z = flux_z.at[:, :, 0].set(sen / nl.Cp)
     flux_x, flux_y = horizontal_flux_scalar(weps, rho0_ones, u, v, rho0_theta0)
 
     scalar_convergence = -((flux_x[1:, :, :] - flux_x[0:-1, :, :]) /

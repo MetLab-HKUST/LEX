@@ -10,16 +10,19 @@ import pressure_gradient_coriolis as pres_grad
 import boundary_conditions as bc
 
 
-def update_rho0_theta0_euler(rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now, x3d4u, y3d4v, z3d4w):
+def update_rho0_theta0_euler(rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now, sen, x3d4u, y3d4v, z3d4w):
     """ Obtain rho0*theta0, rho0, theta0, pi0, and rho0*heating for the next step """
     d_rho0theta0_dt_now, rho0_theta0_heating_now = compute_rho0_theta0_tendency(rho0_theta0_now, rho0_now, u_now, v_now,
-                                                                                w_now, heating_now, x3d4u, y3d4v, z3d4w)
+                                                                                w_now, heating_now, sen, x3d4u, y3d4v, z3d4w)
     rho0_theta0_next = rho0_theta0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + d_rho0theta0_dt_now * nl.dt
     pi0_next = (rho0_theta0_next * nl.Rd / nl.p00) ** (nl.Rd / nl.Cv)
     pi0_next8w = pres_eqn.interpolate_scalar2w(pi0_next)
     d_pi0_dz = (pi0_next8w[:, :, 1:] - pi0_next8w[:, :, 0:-1]) / (
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])
+    #d_pi0_dz = jnp.where((d_pi0_dz>=0.0) & (d_pi0_dz<1.0e-8), 1.0e-8, d_pi0_dz)
+    #d_pi0_dz = jnp.where((d_pi0_dz<0.0) & (d_pi0_dz>-1.0e-8), -1.0e-8, d_pi0_dz)
+    
     theta0_next = -nl.g / nl.Cp / d_pi0_dz
     rho0_next = rho0_theta0_next / theta0_next
     # update ghost points
@@ -30,11 +33,11 @@ def update_rho0_theta0_euler(rho0_theta0_now, rho0_now, u_now, v_now, w_now, hea
     return rho0_theta0_next3, rho0_next3, theta0_next3, pi0_next3, rho0_theta0_heating_now, d_rho0theta0_dt_now
 
 
-def update_rho0_theta0_leapfrog(rho0_theta0_prev, rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now,
+def update_rho0_theta0_leapfrog(rho0_theta0_prev, rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now, sen,
                                 x3d4u, y3d4v, z3d4w):
     """ Obtain rho0*theta0, rho0, theta0, pi0, and rho0*heating for the next step """
     d_rho0theta0_dt_now, rho0_theta0_heating_now = compute_rho0_theta0_tendency(rho0_theta0_now, rho0_now, u_now, v_now,
-                                                                                w_now, heating_now, x3d4u, y3d4v, z3d4w)
+                                                                                w_now, heating_now, sen, x3d4u, y3d4v, z3d4w)
     rho0_theta0_next = rho0_theta0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy,
                                         nl.ngz:-nl.ngz] + d_rho0theta0_dt_now * 2.0 * nl.dt
     pi0_next = (rho0_theta0_next * nl.Rd / nl.p00) ** (nl.Rd / nl.Cv)
@@ -42,6 +45,9 @@ def update_rho0_theta0_leapfrog(rho0_theta0_prev, rho0_theta0_now, rho0_now, u_n
     d_pi0_dz = (pi0_next8w[:, :, 1:] - pi0_next8w[:, :, 0:-1]) / (
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])
+    #d_pi0_dz = jnp.where((d_pi0_dz>=0.0) & (d_pi0_dz<1.0e-8), 1.0e-8, d_pi0_dz)
+    #d_pi0_dz = jnp.where((d_pi0_dz<0.0) & (d_pi0_dz>-1.0e-8), -1.0e-8, d_pi0_dz)
+    
     theta0_next = -nl.g / nl.Cp / d_pi0_dz
     rho0_next = rho0_theta0_next / theta0_next
     # update ghost points
@@ -98,11 +104,17 @@ def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w
                                             x3d, x3d4u, y3d, y3d4v, z3d4w)
 
     tol = 1.0e-6  # the tolerance level needs to be tested and tuned.
+    atol = 1.0e-8
     # using previous step pi\' as the first guess x0
-    pip = jax.scipy.sparse.linalg.gmres(
-        lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
-        rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-        tol=tol, maxiter=100, solve_method='incremental')
+    # pip = jax.scipy.sparse.linalg.gmres(
+    #     lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
+    #     rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+    #     tol=tol, atol=atol, maxiter=300, solve_method='incremental')
+
+    pip = jax.scipy.sparse.linalg.bicgstab(lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
+                                           rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                           tol=tol, atol=atol, maxiter=300)
+
     return pip
 
 
@@ -114,6 +126,13 @@ def correct_pip_constant(rho0_prev, theta0_prev, pi0_prev, rho0_next, theta0_nex
     phi = 1.0 / pi0_now * (rho0_next * t0_next - rho0_prev * t0_prev)
     numerator = -space_integration(pip_now * phi, x3d4u, y3d4v, z3d4w)
     denominator = space_integration(phi, x3d4u, y3d4v, z3d4w)
+    return numerator/denominator
+
+
+def correct_pip_constant2(rho0_now, pip_now, x3d4u, y3d4v, z3d4w):
+    """ Add a constant to the solution to the Poisson-like equation for pressure perturbations """
+    numerator = -space_integration(rho0_now * pip_now, x3d4u, y3d4v, z3d4w)
+    denominator = space_integration(rho0_now, x3d4u, y3d4v, z3d4w)
     return numerator/denominator
 
 
@@ -185,10 +204,10 @@ def prep_momentum_eqn(rho0, u, v, w, flow_divergence, u_sfc_flux, v_sfc_flux, x3
     return adv4u, adv4v, adv4w
 
 
-def compute_rho0_theta0_tendency(rho0_theta0, rho0, u, v, w, heating, x3d4u, y3d4v, z3d4w):
+def compute_rho0_theta0_tendency(rho0_theta0, rho0, u, v, w, heating, sen, x3d4u, y3d4v, z3d4w):
     """ Compute the tendency for rho0*theta0 """
     weps = 1.0e-17  # chosen based on CM1 weps for theta equation
-    convergence = adv.rho0_theta0_flux_convergence(rho0_theta0, u, v, w, weps, x3d4u, y3d4v, z3d4w)
+    convergence = adv.rho0_theta0_flux_convergence(rho0_theta0, sen, u, v, w, weps, x3d4u, y3d4v, z3d4w)
     # heating term here has the unit of K/s. It should be the heating tendency for theta equation, i.e., Hm/Cp/pi0
     rho0_theta0_heating = rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * heating
     tendency = convergence + rho0_theta0_heating  # no ghost points tendency
@@ -205,7 +224,7 @@ def compute_theta_tendency(rho0, theta, u, v, w, flow_divergence, sfc_flux, heat
 
 def compute_qv_tendency(rho0, qv, u, v, w, flow_divergence, sfc_flux, x3d4u, y3d4v, z3d4w):
     """ Compute the tendency for qv """
-    weps = 1.0e-20  # chosen based on CM1 weps for qv equation
+    weps = 1.0e-18  #  CM1 weps for qv equation is 1e-20, but that leads to NaN in LEX, so we use this larger value
     adv_qv = adv.advection_scalar(rho0, qv, u, v, w, weps, flow_divergence, sfc_flux, x3d4u, y3d4v, z3d4w)
     tendency = adv_qv  # + microphysics in the future
     return tendency

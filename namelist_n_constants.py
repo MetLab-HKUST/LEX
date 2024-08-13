@@ -1,9 +1,9 @@
 """ Namelist variables and constants for LEX """
 
 # Time integration
-dt = 1.0           # one-step integration time step
-sprint_n = 10      # dt*sprint_n is the interval of data saving
-relay_n = 6        # number of sprints, relay_n*sprint_n*dt is the total integration time
+dt = 3             # one-step integration time step
+sprint_n = 20      # dt*sprint_n is the interval of data saving
+relay_n = 10       # number of sprints, relay_n*sprint_n*dt is the total integration time
 asselin_r = 0.2    # r factor in the Asselin filtering
 
 # Grid configuration
@@ -48,8 +48,8 @@ Karman = 0.4    # von Karman constant
 
 # Rayleigh damping
 ir_damp = True
-z_damping = 9000.0    # height above which Rayleigh damping is applied
-rd_alpha = 1.0/300.0    # Inverse e-folding time for upper - level Rayleigh damping layer
+z_damping = 10000.0    # height above which Rayleigh damping is applied
+rd_alpha = 1.0/600.0    # Inverse e-folding time for upper - level Rayleigh damping layer
 
 # output file name
 fileNameFormat = "experiments/lex_out_%0.4i.nc"

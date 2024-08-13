@@ -70,7 +70,7 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, su
 
     theta0 = theta0.at[:].set(300.0)
     d_pi0_dz = -nl.g / nl.Cp / theta0
-    pi0_part = jnp.cumsum(d_pi0_dz[:, :, nl.ngz:-nl.ngz], axis=2) + 1.0
+    pi0_part = jnp.cumsum(d_pi0_dz[:, :, nl.ngz:-nl.ngz], axis=2)*nl.dz + 1.0
     pi0_bottom = jnp.ones((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, 1))
     pi08w = jnp.concatenate((pi0_bottom, pi0_part), axis=2)
     pi0 = pi0.at[:, :, nl.ngz:-nl.ngz].set(0.5 * (pi08w[:, :, 0:-1] + pi08w[:, :, 1:]))
@@ -87,8 +87,9 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, su
     xr = 2000.0
     yr = 2000.0
     zr = 2000.0
-    r = jnp.sqrt(((x3d - xc) / xr)**2 + ((y3d - yc) / yr)**2 + ((z3d - zc) / zr)**2)
-    theta_p = 1.0 * (jnp.cos(r * np.pi) + 1.0)
+    r = jnp.sqrt(((x3d - xc) / xr)**2 + ((y3d - yc) / yr)**2 + ((z3d - zc) / zr)**2)    # bubble
+    # r = jnp.sqrt(((y3d - yc) / xr)**2 + ((z3d - zc) / zr)**2)
+    theta_p = 0.5 * (jnp.cos(r * np.pi) + 1.0)
     theta_p = jnp.where(r > 1.0, 0.0, theta_p)
     theta = theta.at[:].set(theta0 + theta_p)
 

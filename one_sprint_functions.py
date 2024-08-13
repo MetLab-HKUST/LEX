@@ -14,11 +14,9 @@ def first_step_integration(phys_ic, grid_ic):
     """ The first step using Euler method """
     (rho0_theta0_now, rho0_now, theta0_now, theta_now, qv_now, u_now, v_now, w_now, pi0_now, pip_now) = phys_ic
     (theta0_ic, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf) = grid_ic
-    # update rho0*theta0 equation
-    heating_now = one.get_heating(theta_now, theta0_ic)
-    rho0_theta0_next, rho0_next, theta0_next, pi0_next, rho0_theta0_heating_now, rho0_theta0_tend_now = one.update_rho0_theta0_euler(
-        rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now, x3d4u, y3d4v, z3d4w)
+    
     # update theta equation
+    heating_now = one.get_heating(theta_now, theta0_ic)
     flow_divergence = adv.get_divergence(rho0_now, u_now, v_now, w_now, x3d4u, y3d4v, z3d4w)
     z_bottom = z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
     u_bottom = 0.5 * (u_now[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz] +
@@ -32,6 +30,19 @@ def first_step_integration(phys_ic, grid_ic):
                                                                   rho_bottom, surface_t)
     theta_next = one.update_theta_euler(rho0_now, theta_now, u_now, v_now, w_now, flow_divergence, sen / nl.Cp,
                                         heating_now, x3d4u, y3d4v, z3d4w)
+
+    # update rho0*theta0 equation
+    rho0_theta0_next, rho0_next, theta0_next, pi0_next, rho0_theta0_heating_now, rho0_theta0_tend_now = one.update_rho0_theta0_euler(
+        rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now, sen, x3d4u, y3d4v, z3d4w)    
+    # ####################
+    # rho0_theta0_next = rho0_theta0_now
+    # rho0_next = rho0_now
+    # theta0_next = theta0_now
+    # pi0_next = pi0_now
+    # rho0_theta0_heating_now = rho0_theta0_heating_now.at[:].set(0.0)
+    # rho0_theta0_tend_now = rho0_theta0_tend_now.at[:].set(0.0)
+    # #####################
+    
     # update pi' equation
     theta_p_now = theta_now - theta0_now
     buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0_now, theta_p_now, qv_now)
@@ -46,10 +57,10 @@ def first_step_integration(phys_ic, grid_ic):
     pip_now = one.padding3_array(pip_now)
     pip_const = one.correct_pip_constant(rho0_now, theta0_now, pi0_now, rho0_next, theta0_next, pi0_next,
                                          pi0_now, pip_now, x3d4u, y3d4v, z3d4w)
-    # pip_const is the correction constant for conserving energy, based on Durran 2008.
+    ###### pip_const = one.correct_pip_constant2(rho0_now, pip_now, x3d4u, y3d4v, z3d4w)
+    # pip_const is the correction constant
     pip_now = pip_now + pip_const
 
-    
     # update momentum equations
     u_next, v_next, w_next = one.update_momentum_eqn_euler(u_now, v_now, w_now, pi0_now, pip_now, theta_now,
                                                            adv4u, adv4v, adv4w, fu, fv, b8w, x3d, y3d, z3d)
@@ -109,12 +120,10 @@ def leapfrog_sprint(phys_state, grid_ic):
         info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = phys_state
     (theta0_ic, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf) = grid_ic
 
-    for i in range(nl.sprint_n):
-        # update rho0*theta0 equation
-        heating_now = one.get_heating(theta_now, theta0_ic)
-        rho0_theta0_next, rho0_next, theta0_next, pi0_next, rho0_theta0_heating_now, rho0_theta0_tend_now = one.update_rho0_theta0_leapfrog(
-            rho0_theta0_prev, rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now, x3d4u, y3d4v, z3d4w)
+    for i in range(nl.sprint_n):        
         # update theta equation
+        heating_now = one.get_heating(theta_now, theta0_ic)
+        heating_now = heating_now.at[:].set(0)  #############
         flow_divergence = adv.get_divergence(rho0_now, u_now, v_now, w_now, x3d4u, y3d4v, z3d4w)
         z_bottom = z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
         u_bottom = 0.5 * (u_now[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz] +
@@ -130,6 +139,19 @@ def leapfrog_sprint(phys_state, grid_ic):
                                                                       q_bottom, rho_bottom, surface_t)
         theta_next = one.update_theta_leapfrog(theta_prev, rho0_now, theta_now, u_now, v_now, w_now, flow_divergence,
                                                sen/nl.Cp, heating_now, x3d4u, y3d4v, z3d4w)
+
+        # update rho0*theta0 equation
+        rho0_theta0_next, rho0_next, theta0_next, pi0_next, rho0_theta0_heating_now, rho0_theta0_tend_now = one.update_rho0_theta0_leapfrog(
+            rho0_theta0_prev, rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now, sen, x3d4u, y3d4v, z3d4w)
+        # ####################
+        # rho0_theta0_next = rho0_theta0_prev
+        # rho0_next = rho0_prev
+        # theta0_next = theta0_prev
+        # pi0_next = pi0_prev
+        # rho0_theta0_heating_now = rho0_theta0_heating_now.at[:].set(0.0)
+        # rho0_theta0_tend_now = rho0_theta0_tend_now.at[:].set(0.0)
+        # #####################
+        
         # update pi' equation
         theta_p_now = theta_now - theta0_now
         buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0_now, theta_p_now, qv_now)
@@ -144,6 +166,7 @@ def leapfrog_sprint(phys_state, grid_ic):
         pip_now = one.padding3_array(pip_now)
         pip_const = one.correct_pip_constant(rho0_prev, theta0_prev, pi0_prev, rho0_next, theta0_next, pi0_next,
                                              pi0_now, pip_now, x3d4u, y3d4v, z3d4w)
+        ####### pip_const = one.correct_pip_constant2(rho0_now, pip_now, x3d4u, y3d4v, z3d4w)
         # pip_const is the correction constant for conserving energy, based on Durran 2008.
         pip_now = pip_now + pip_const
     
@@ -168,6 +191,7 @@ def leapfrog_sprint(phys_state, grid_ic):
                         u_prev, v_prev, w_prev, rho0_theta0_prev, theta_prev, qv_prev,
                         u_now, v_now, w_now, rho0_theta0_now, theta_now, qv_now,
                         u_next, v_next, w_next, rho0_theta0_next, theta_next, qv_next, z3d4w)
+
         # replace 'prev' and 'now' by 'now‘ and 'next'
         theta_prev = theta_now
         theta_now = theta_next
