@@ -33,10 +33,10 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     itime = nc_file.createVariable("time", np.float32, ("time",))
     itime.long_name = "time (s)"
 
-    (rho0_theta0_prev, rho0_theta0_now, rho0_prev, rho0_now, theta0_prev, theta0_now,
-     theta_prev, theta_now, pi0_prev, pi0_now, pip_prev,
+    (rho0_theta0_prev, rho0_prev, theta0_prev,
+     theta_prev, theta_now, pi0_prev, pip_prev,
+     rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres,
      qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
-     rho0_theta0_heating_prev, rho0_theta0_tend_prev,
      info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = phys_state
     (_, _, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, _, _) = grid_ic
 
@@ -58,19 +58,9 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     rho0_theta0_1[:, :, :, :] = np.reshape(rho0_theta0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                            (1, x_size, y_size, z_size))
 
-    rho0_theta0_2 = nc_file.createVariable("rho0_theta0_next", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
-    rho0_theta0_2.long_name = "rho0*theta0 for the next time step"
-    rho0_theta0_2[:, :, :, :] = np.reshape(rho0_theta0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                                           (1, x_size, y_size, z_size))
-
     theta0_1 = nc_file.createVariable("theta0_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     theta0_1.long_name = "theta0 for the current time"
     theta0_1[:, :, :, :] = np.reshape(theta0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                                      (1, x_size, y_size, z_size))
-
-    theta0_2 = nc_file.createVariable("theta0_next", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
-    theta0_2.long_name = "theta0 for the next time step"
-    theta0_2[:, :, :, :] = np.reshape(theta0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                       (1, x_size, y_size, z_size))
 
     theta_1 = nc_file.createVariable("theta_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
@@ -88,15 +78,31 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     pi0_1[:, :, :, :] = np.reshape(pi0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                    (1, x_size, y_size, z_size))
 
-    pi0_2 = nc_file.createVariable("pi0_next", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
-    pi0_2.long_name = "pi0 for the next time step"
-    pi0_2[:, :, :, :] = np.reshape(pi0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z_size))
-
     pip_1 = nc_file.createVariable("pip_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     pip_1.long_name = "pip for the current time"
     pip_1[:, :, :, :] = np.reshape(pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                    (1, x_size, y_size, z_size))
 
+    rhs_1 = nc_file.createVariable("rhs_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    rhs_1.long_name = "rhs of pressure equation"
+    rhs_1[:, :, :, :] = np.reshape(rhs, (1, x_size, y_size, z_size))
+
+    rhs_adv_1 = nc_file.createVariable("rhs_adv_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    rhs_adv_1.long_name = "rhs adv of pressure equation"
+    rhs_adv_1[:, :, :, :] = np.reshape(rhs_adv, (1, x_size, y_size, z_size))
+
+    rhs_cor_1 = nc_file.createVariable("rhs_cor", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    rhs_cor_1.long_name = "rhs Coriolis of pressure equation"
+    rhs_cor_1[:, :, :, :] = np.reshape(rhs_cor, (1, x_size, y_size, z_size))
+
+    rhs_buoy_1 = nc_file.createVariable("rhs_buoy_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    rhs_buoy_1.long_name = "rhs buoyancy of pressure equation"
+    rhs_buoy_1[:, :, :, :] = np.reshape(rhs_buoy, (1, x_size, y_size, z_size))
+
+    rhs_pres_1 = nc_file.createVariable("rhs_pres_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    rhs_pres_1.long_name = "rhs buoyancy of pressure equation"
+    rhs_pres_1[:, :, :, :] = np.reshape(rhs_pres, (1, x_size, y_size, z_size))
+    
     qv_1 = nc_file.createVariable("qv_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     qv_1.long_name = "qv for the current time"
     qv_1[:, :, :, :] = np.reshape(qv_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z_size))
@@ -128,16 +134,6 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     w_2 = nc_file.createVariable("w_next", np.float32, ("time", "x", "y", "z4w"), fill_value=1.0e36)
     w_2.long_name = "w for the next time step"
     w_2[:, :, :, :] = np.reshape(w_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], (1, x_size, y_size, z4w_size))
-
-    rho0_theta0_heating_1 = nc_file.createVariable("rho0_theta0_heating_now", np.float32, ("time", "x", "y", "z"),
-                                                   fill_value=1.0e36)
-    rho0_theta0_heating_1.long_name = "rho0_theta0_heating for the current time"
-    rho0_theta0_heating_1[:, :, :, :] = np.reshape(rho0_theta0_heating_prev, (1, x_size, y_size, z_size))
-
-    rho0_theta0_tend_1 = nc_file.createVariable("rho0_theta0_tend_now", np.float32, ("time", "x", "y", "z"),
-                                                fill_value=1.0e36)
-    rho0_theta0_tend_1.long_name = "rho0_theta0_tend for the current time"
-    rho0_theta0_tend_1[:, :, :, :] = np.reshape(rho0_theta0_tend_prev, (1, x_size, y_size, z_size))
 
     info_1 = nc_file.createVariable("info_now", np.float32, "time", fill_value=1.0e36)
     info_1.long_name = "exit code of the Poisson-like equation solver"

@@ -10,54 +10,6 @@ import pressure_gradient_coriolis as pres_grad
 import boundary_conditions as bc
 
 
-def update_rho0_theta0_euler(rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now, sen, x3d4u, y3d4v, z3d4w):
-    """ Obtain rho0*theta0, rho0, theta0, pi0, and rho0*heating for the next step """
-    d_rho0theta0_dt_now, rho0_theta0_heating_now = compute_rho0_theta0_tendency(rho0_theta0_now, rho0_now, u_now, v_now,
-                                                                                w_now, heating_now, sen, x3d4u, y3d4v, z3d4w)
-    rho0_theta0_next = rho0_theta0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + d_rho0theta0_dt_now * nl.dt
-    pi0_next = (rho0_theta0_next * nl.Rd / nl.p00) ** (nl.Rd / nl.Cv)
-    pi0_next8w = pres_eqn.interpolate_scalar2w(pi0_next)
-    d_pi0_dz = (pi0_next8w[:, :, 1:] - pi0_next8w[:, :, 0:-1]) / (
-            z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
-            z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])
-    #d_pi0_dz = jnp.where((d_pi0_dz>=0.0) & (d_pi0_dz<1.0e-8), 1.0e-8, d_pi0_dz)
-    #d_pi0_dz = jnp.where((d_pi0_dz<0.0) & (d_pi0_dz>-1.0e-8), -1.0e-8, d_pi0_dz)
-    
-    theta0_next = -nl.g / nl.Cp / d_pi0_dz
-    rho0_next = rho0_theta0_next / theta0_next
-    # update ghost points
-    rho0_theta0_next3 = padding3_array(rho0_theta0_next)
-    rho0_next3 = padding3_array(rho0_next)
-    theta0_next3 = padding3_array(theta0_next)
-    pi0_next3 = padding3_array(pi0_next)
-    return rho0_theta0_next3, rho0_next3, theta0_next3, pi0_next3, rho0_theta0_heating_now, d_rho0theta0_dt_now
-
-
-def update_rho0_theta0_leapfrog(rho0_theta0_prev, rho0_theta0_now, rho0_now, u_now, v_now, w_now, heating_now, sen,
-                                x3d4u, y3d4v, z3d4w):
-    """ Obtain rho0*theta0, rho0, theta0, pi0, and rho0*heating for the next step """
-    d_rho0theta0_dt_now, rho0_theta0_heating_now = compute_rho0_theta0_tendency(rho0_theta0_now, rho0_now, u_now, v_now,
-                                                                                w_now, heating_now, sen, x3d4u, y3d4v, z3d4w)
-    rho0_theta0_next = rho0_theta0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy,
-                                        nl.ngz:-nl.ngz] + d_rho0theta0_dt_now * 2.0 * nl.dt
-    pi0_next = (rho0_theta0_next * nl.Rd / nl.p00) ** (nl.Rd / nl.Cv)
-    pi0_next8w = pres_eqn.interpolate_scalar2w(pi0_next)
-    d_pi0_dz = (pi0_next8w[:, :, 1:] - pi0_next8w[:, :, 0:-1]) / (
-            z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
-            z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])
-    #d_pi0_dz = jnp.where((d_pi0_dz>=0.0) & (d_pi0_dz<1.0e-8), 1.0e-8, d_pi0_dz)
-    #d_pi0_dz = jnp.where((d_pi0_dz<0.0) & (d_pi0_dz>-1.0e-8), -1.0e-8, d_pi0_dz)
-    
-    theta0_next = -nl.g / nl.Cp / d_pi0_dz
-    rho0_next = rho0_theta0_next / theta0_next
-    # update ghost points
-    rho0_theta0_next3 = padding3_array(rho0_theta0_next)
-    rho0_next3 = padding3_array(rho0_next)
-    theta0_next3 = padding3_array(theta0_next)
-    pi0_next3 = padding3_array(pi0_next)
-    return rho0_theta0_next3, rho0_next3, theta0_next3, pi0_next3, rho0_theta0_heating_now, d_rho0theta0_dt_now
-
-
 def update_theta_euler(rho0_now, theta_now, u_now, v_now, w_now, flow_divergence, sfc_flux, heating, x3d4u, y3d4v,
                        z3d4w):
     """ Update theta to get the next-step values """
@@ -95,41 +47,27 @@ def update_qv_leapfrog(qv_prev, rho0_now, qv_now, u_now, v_now, w_now, flow_dive
 
 
 def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
-                   rho0_theta0_heating1, rho0_theta0_heating2, rho0_theta0_tend1, rho0_theta0_tend2,
                    x3d, x3d4u, y3d, y3d4v, z3d, z3d4w):
     """ Solve the Poisson-like equation for pressure perturbations, pi\' (pip) """
-    rhs = pres_eqn.rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
-                                            rho0_theta0_heating1, rho0_theta0_heating2, rho0_theta0_tend1,
-                                            rho0_theta0_tend2,
+    rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres = pres_eqn.rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
                                             x3d, x3d4u, y3d, y3d4v, z3d4w)
 
-    tol = 1.0e-6  # the tolerance level needs to be tested and tuned.
-    atol = 1.0e-8
+    tol = 1.0e-4  # the tolerance level needs to be tested and tuned.
+    atol = 1.0e-9
     # using previous step pi\' as the first guess x0
-    # pip = jax.scipy.sparse.linalg.gmres(
+    # pip, info = jax.scipy.sparse.linalg.gmres(
     #     lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
     #     rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-    #     tol=tol, atol=atol, maxiter=300, solve_method='incremental')
+    #     tol=tol, atol=atol, maxiter=200, solve_method='incremental')
 
-    pip = jax.scipy.sparse.linalg.bicgstab(lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
+    pip, info = jax.scipy.sparse.linalg.bicgstab(lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
                                            rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                                           tol=tol, atol=atol, maxiter=300)
+                                           tol=tol, atol=atol, maxiter=200)
 
-    return pip
-
-
-def correct_pip_constant(rho0_prev, theta0_prev, pi0_prev, rho0_next, theta0_next, pi0_next, pi0_now, pip_now,
-                         x3d4u, y3d4v, z3d4w):
-    """ Add a constant to the solution to the Poisson-like equation for pressure perturbations """
-    t0_prev = pi0_prev * theta0_prev
-    t0_next = pi0_next * theta0_next
-    phi = 1.0 / pi0_now * (rho0_next * t0_next - rho0_prev * t0_prev)
-    numerator = -space_integration(pip_now * phi, x3d4u, y3d4v, z3d4w)
-    denominator = space_integration(phi, x3d4u, y3d4v, z3d4w)
-    return numerator/denominator
+    return pip, info, rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres
 
 
-def correct_pip_constant2(rho0_now, pip_now, x3d4u, y3d4v, z3d4w):
+def correct_pip_constant(rho0_now, pip_now, x3d4u, y3d4v, z3d4w):
     """ Add a constant to the solution to the Poisson-like equation for pressure perturbations """
     numerator = -space_integration(rho0_now * pip_now, x3d4u, y3d4v, z3d4w)
     denominator = space_integration(rho0_now, x3d4u, y3d4v, z3d4w)
@@ -168,31 +106,17 @@ def update_momentum_eqn_leapfrog(u_prev, v_prev, w_prev, pi0_now, pip_now, theta
     return u_next3, v_next3, w_next3
 
 
-def asselin_filter(u_prev, v_prev, w_prev, rho0_theta0_prev, theta_prev, qv_prev,
-                   u_now, v_now, w_now, rho0_theta0_now, theta_now, qv_now,
-                   u_next, v_next, w_next, rho0_theta0_next, theta_next, qv_next, z3d4w):
+def asselin_filter(u_prev, v_prev, w_prev, theta_prev, qv_prev,
+                   u_now, v_now, w_now, theta_now, qv_now,
+                   u_next, v_next, w_next, theta_next, qv_next):
     """ Asselin filter """
     u_now_f = (1.0 - 2.0 * nl.asselin_r) * u_now + nl.asselin_r * (u_prev + u_next)
     v_now_f = (1.0 - 2.0 * nl.asselin_r) * v_now + nl.asselin_r * (v_prev + v_next)
     w_now_f = (1.0 - 2.0 * nl.asselin_r) * w_now + nl.asselin_r * (w_prev + w_next)
-    rho0_theta0_now_f = (1.0 - 2.0 * nl.asselin_r) * rho0_theta0_now + nl.asselin_r * (
-            rho0_theta0_prev + rho0_theta0_next)
     theta_now_f = (1.0 - 2.0 * nl.asselin_r) * theta_now + nl.asselin_r * (theta_prev + theta_next)
     qv_now_f = (1.0 - 2.0 * nl.asselin_r) * qv_now + nl.asselin_r * (qv_prev + qv_next)
 
-    pi0_now_f = (rho0_theta0_now_f * nl.Rd / nl.p00) ** (nl.Rd / nl.Cv)
-    pi0_now_f8w = pres_eqn.interpolate_scalar2w(pi0_now_f[:, :, nl.ngz:-nl.ngz])
-    d_pi0_dz = (pi0_now_f8w[:, :, 1:] - pi0_now_f8w[:, :, 0:-1]) / (
-            z3d4w[:, :, nl.ngz + 1:-nl.ngz] - z3d4w[:, :, nl.ngz:-(nl.ngz + 1)])
-    theta0_now_f_part = -nl.g / nl.Cp / d_pi0_dz
-    x_size, y_size, _ = theta0_now_f_part.shape
-    bottom = jnp.reshape(theta0_now_f_part[:, :, 0], (x_size, y_size, 1))
-    top = jnp.reshape(theta0_now_f_part[:, :, -1], (x_size, y_size, 1))
-    theta0_now_f = jnp.concatenate((bottom, theta0_now_f_part, top), axis=2)
-
-    rho0_now_f = rho0_theta0_now_f / theta0_now_f
-
-    return u_now_f, v_now_f, w_now_f, rho0_theta0_now_f, rho0_now_f, theta0_now_f, theta_now_f, qv_now_f
+    return u_now_f, v_now_f, w_now_f, theta_now_f, qv_now_f
 
 
 def prep_momentum_eqn(rho0, u, v, w, flow_divergence, u_sfc_flux, v_sfc_flux, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w):
@@ -202,16 +126,6 @@ def prep_momentum_eqn(rho0, u, v, w, flow_divergence, u_sfc_flux, v_sfc_flux, x3
     adv4v = adv.advection_v(rho0, u, v, w, weps, flow_divergence, v_sfc_flux, x3d4u, y3d, z3d4w)
     adv4w = adv.advection_w(rho0, u, v, w, weps, flow_divergence, x3d4u, y3d4v, z3d)
     return adv4u, adv4v, adv4w
-
-
-def compute_rho0_theta0_tendency(rho0_theta0, rho0, u, v, w, heating, sen, x3d4u, y3d4v, z3d4w):
-    """ Compute the tendency for rho0*theta0 """
-    weps = 1.0e-17  # chosen based on CM1 weps for theta equation
-    convergence = adv.rho0_theta0_flux_convergence(rho0_theta0, sen, u, v, w, weps, x3d4u, y3d4v, z3d4w)
-    # heating term here has the unit of K/s. It should be the heating tendency for theta equation, i.e., Hm/Cp/pi0
-    rho0_theta0_heating = rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * heating
-    tendency = convergence + rho0_theta0_heating  # no ghost points tendency
-    return tendency, rho0_theta0_heating
 
 
 def compute_theta_tendency(rho0, theta, u, v, w, flow_divergence, sfc_flux, heating, x3d4u, y3d4v, z3d4w):
@@ -262,6 +176,20 @@ def padding3_array(arr):
     """ Padding an array with three ghost points on each side """
     arr_x = jnp.concatenate((arr[-nl.ngx:, :, :], arr, arr[0:nl.ngx, :, :]), axis=0)
     arr_xy = jnp.concatenate((arr_x[:, -nl.ngx:, :], arr_x, arr_x[:, 0:nl.ngx, :]), axis=1)
+    x_size, y_size, _ = jnp.shape(arr_xy)
+    bottom = jnp.reshape(arr_xy[:, :, 0], (x_size, y_size, 1))
+    top = jnp.reshape(arr_xy[:, :, -1], (x_size, y_size, 1))
+    arr_xyz = jnp.concatenate((bottom, arr_xy, top), axis=2)
+    # The ghost points at the bottom and top are more like placeholders, without practical use for now.
+    return arr_xyz
+
+
+def padding3_0_array(arr):
+    """ Padding an array with three ghost points on each side """
+    x0s = jnp.zeros((nl.ngx, arr.shape[1], arr.shape[2]))
+    arr_x = jnp.concatenate((x0s, arr, x0s), axis=0)
+    y0s = jnp.zeros((arr_x.shape[0], nl.ngy, arr_x.shape[2]))
+    arr_xy = jnp.concatenate((y0s, arr_x, y0s), axis=1)
     x_size, y_size, _ = jnp.shape(arr_xy)
     bottom = jnp.reshape(arr_xy[:, :, 0], (x_size, y_size, 1))
     top = jnp.reshape(arr_xy[:, :, -1], (x_size, y_size, 1))

@@ -149,31 +149,6 @@ def advection_w(rho0, u, v, w, weps, flow_divergence, x3d4u, y3d4v, z3d):
     return adv_tendency
 
 
-def rho0_theta0_flux_convergence(rho0_theta0, sen, u, v, w, weps, x3d4u, y3d4v, z3d4w):
-    """ Compute the convergence of rho0*theta0 flux
-
-    This term is for the pseudo-density equation, thus it does not use the generic scalar advection function.
-    3rd-order WENO is used to compute the vertical flux, and 5th-order WENO is used to compute the horizontal fluxes.
-    """
-    rho0_ones = np.ones((nl.nx + 2 * nl.ngx, nl.ny + 2 * nl.ngy, nl.nz + 2 * nl.ngz))  # dummy array with 1s
-    flux_z = vertical_flux_scalar(weps, rho0_ones, w, rho0_theta0)
-    flux_z = flux_z.at[:, :, 0].set(sen / nl.Cp)
-    flux_x, flux_y = horizontal_flux_scalar(weps, rho0_ones, u, v, rho0_theta0)
-
-    scalar_convergence = -((flux_x[1:, :, :] - flux_x[0:-1, :, :]) /
-                           (x3d4u[nl.ngx + 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
-                            x3d4u[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) +
-                           (flux_y[:, 1:, :] - flux_y[:, 0:-1, :]) /
-                           (y3d4v[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz:-nl.ngz] -
-                            y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy + 1), nl.ngz:-nl.ngz]) +
-                           (flux_z[:, :, 1:] - flux_z[:, :, 0:-1]) /
-                           (z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
-                            z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])
-                           )
-
-    return scalar_convergence
-
-
 def get_divergence(rho0, u, v, w, x3d4u, y3d4v, z3d4w):
     """ Compute the divergence of (rho0*u, rho0*v, rho0*w) """
     rho8u_part = 0.5 * (rho0[0:-1, :, :] + rho0[1:, :, :])
@@ -198,7 +173,7 @@ def get_divergence(rho0, u, v, w, x3d4u, y3d4v, z3d4w):
     div_x = (rho_u[1:, :, :] - rho_u[0:-1, :, :]) / (x3d4u[1:, :, :] - x3d4u[0:-1, :, :])
     div_y = (rho_v[:, 1:, :] - rho_v[:, 0:-1, :]) / (y3d4v[:, 1:, :] - y3d4v[:, 0:-1, :])
     div_z = (rho_w[:, :, 1:] - rho_w[:, :, 0:-1]) / (z3d4w[:, :, 1:] - z3d4w[:, :, 0:-1])
-    div_rho_u = div_x + div_y + div_z  # ghost points kept; they are needed for interpolation onto staggered points
+    div_rho_u = div_x + div_y + div_z  # ghost points kept
 
     return div_rho_u
 

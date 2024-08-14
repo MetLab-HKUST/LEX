@@ -49,48 +49,30 @@ def laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, pi):
 
 
 def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
-                             rho0_theta0_heating1, rho0_theta0_heating2, rho0_theta0_tend1, rho0_theta0_tend2,
                              x3d, x3d4u, y3d, y3d4v, z3d4w):
     """ Compute the right hand side of the pressure equation """
-    rhs = -get_divergence(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+    rhs_adv = get_divergence(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                           adv4u, adv4v, adv4w, x3d4u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                           y3d4v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                           z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
     # Assuming that rho0_theta0 has all the ghost points, but advection tendencies have no ghost points
 
-    rhs = rhs + get_2d_divergence(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+    rhs_cor = get_2d_divergence(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                   fv, -fu, x3d4u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                   y3d4v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
     # Assuming that fv and fu have been put onto u and v points, respectively, and have not ghost points
 
     rho0_theta0_b = interpolate_scalar2w(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * buoyancy)
     # Assuming buoyancy B has no ghost points; interpolate from scalar to w points and include bottom/top w level values
-    rhs = rhs + nl.g * (rho0_theta0_b[:, :, 1:] - rho0_theta0_b[:, :, 0:-1]) / (
+    rhs_buoy = (rho0_theta0_b[:, :, 1:] - rho0_theta0_b[:, :, 0:-1]) / (
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])
 
-    rhs = rhs - horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v,
+    rhs_pres = - horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v,
                                                     rtt, pi0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
 
-    # rho0_theta0_heating1 and rho0_theta0_heating2 are the heating tendency term in the rho0*theta0 equation. They are
-    # not just the heating rate, but also include factors rho0, C_p, pi0, i.e. rho0 * H_m / c_p / pi0. 1 and 2 denotes
-    # values at time levels 1 (previous) and 2 (now). Ideally we want use heating at level 3 (future), but when cloud
-    # microphysics is included, latent heating depends on vertical velocity, whose level 3 value cannot be obtained
-    # before we solve the Poisson-type pressure equation.
-    rhs = rhs - (rho0_theta0_heating2 - rho0_theta0_heating1) / nl.dt
-
-    # rho0_theta0_tend1 and rho0_theta0_tend2 are the tendency for rho0*theta0 for the three time levels,
-    rho0_theta0_tend = 0.5 * (rho0_theta0_tend1 + rho0_theta0_tend2)
-    rhs = rhs + get_divergence(rho0_theta0_tend, u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                               v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                               w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                               x3d4u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                               y3d4v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                               z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
-
-    rhs = rhs + (rho0_theta0_tend2 - rho0_theta0_tend1) / nl.dt
-
-    return rhs
+    rhs = rhs_adv + rhs_cor + rhs_buoy + rhs_pres
+    return rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres
 
 
 def horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v, rtt, pi):
@@ -188,9 +170,5 @@ def calculate_buoyancy(theta0, theta_p, qv):
     """ Calculate buoyancy term """
     ###### b = nl.g * (theta_p / theta0 + nl.repsm1 * qv)
     b = nl.g * (theta_p / theta0)    # ignore water vapor
-    b8w = 0.5 * (b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] +
-                 b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz])
-    zero8w = jnp.zeros((nl.nx, nl.ny))
-    b8w = b8w.at[:, :, 0].set(zero8w)
-    b8w = b8w.at[:, :, -1].set(zero8w)
+    b8w = interpolate_scalar2w(b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
     return b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], b8w

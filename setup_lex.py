@@ -69,16 +69,6 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, su
     v = v.at[:].set(0.0)
 
     theta0 = theta0.at[:].set(300.0)
-    d_pi0_dz = -nl.g / nl.Cp / theta0
-    pi0_part = jnp.cumsum(d_pi0_dz[:, :, nl.ngz:-nl.ngz], axis=2)*nl.dz + 1.0
-    pi0_bottom = jnp.ones((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, 1))
-    pi08w = jnp.concatenate((pi0_bottom, pi0_part), axis=2)
-    pi0 = pi0.at[:, :, nl.ngz:-nl.ngz].set(0.5 * (pi08w[:, :, 0:-1] + pi08w[:, :, 1:]))
-    pi0 = pi0.at[:, :, (0, -1)].set(pi0[:, :, (nl.ngz, -nl.ngz)])
-
-    rho0_theta0 = rho0_theta0.at[:].set(pi0**(nl.Cv/nl.Rd) * nl.p00 / nl.Rd)
-    rho0 = rho0.at[:].set(rho0_theta0 / theta0)
-
     # initial center location of the warm bubble
     xc = 12800.0
     yc = 12800.0
@@ -89,11 +79,27 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, su
     zr = 2000.0
     r = jnp.sqrt(((x3d - xc) / xr)**2 + ((y3d - yc) / yr)**2 + ((z3d - zc) / zr)**2)    # bubble
     # r = jnp.sqrt(((y3d - yc) / xr)**2 + ((z3d - zc) / zr)**2)
-    theta_p = 0.5 * (jnp.cos(r * np.pi) + 1.0)
+    theta_p = 1.0 * (jnp.cos(r * np.pi/2.0))**2
     theta_p = jnp.where(r > 1.0, 0.0, theta_p)
     theta = theta.at[:].set(theta0 + theta_p)
 
-    pi = (rho0 * theta * nl.Rd / nl.p00)**(nl.Rd / nl.Cv)    # an estimate of total pi
+    d_pi0_dz = -nl.g / nl.Cp / theta0
+    pi0_part = jnp.cumsum(d_pi0_dz[:, :, nl.ngz:-nl.ngz], axis=2)*nl.dz + 1.0
+    pi0_bottom = jnp.ones((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, 1))
+    pi08w = jnp.concatenate((pi0_bottom, pi0_part), axis=2)
+    pi0 = pi0.at[:, :, nl.ngz:-nl.ngz].set(0.5 * (pi08w[:, :, 0:-1] + pi08w[:, :, 1:]))
+    pi0 = pi0.at[:, :, (0, -1)].set(pi0[:, :, (nl.ngz, -nl.ngz)])
+
+    rho0_theta0 = rho0_theta0.at[:].set(pi0**(nl.Cv/nl.Rd) * nl.p00 / nl.Rd)
+    rho0 = rho0.at[:].set(rho0_theta0 / theta0)
+
+    d_pi_dz = -nl.g / nl.Cp / theta
+    pi_part = jnp.cumsum(d_pi_dz[:, :, nl.ngz:-nl.ngz], axis=2)*nl.dz + 1.0
+    pi_bottom = jnp.ones((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, 1))
+    pi8w = jnp.concatenate((pi_bottom, pi_part), axis=2)
+    pi = jnp.zeros(pi0.shape)
+    pi = pi.at[:, :, nl.ngz:-nl.ngz].set(0.5 * (pi8w[:, :, 0:-1] + pi8w[:, :, 1:]))
+    pi = pi.at[:, :, (0, -1)].set(pi[:, :, (nl.ngz, -nl.ngz)])
     pip = pip.at[:].set(pi - pi0)
 
     pressure = pi**(nl.Cp / nl.Rd) * nl.p00
