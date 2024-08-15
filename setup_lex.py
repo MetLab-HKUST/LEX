@@ -7,7 +7,6 @@ import numpy as np
 import namelist_n_constants as nl
 
 
-@partial(jax.jit, static_argnames=['ic_option'])
 def setup_grid_n_ic(ic_option):
     """ Set up the grid mesh and initial condition """
     # Coordinates for cell center variables
@@ -27,24 +26,27 @@ def setup_grid_n_ic(ic_option):
 
     # Allocate all physics state variables for I.C.
     # "0" is used to denote the reference state; _p denotes perturbations
+    rho0_theta0 = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
     rho0 = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
     theta0 = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
-    rho0_theta0 = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
+    # rho0_theta0 above uses *density* potential temperature, including water vapor effect
     theta = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
     pi0 = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
     pip = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
     u = jnp.zeros((nl.nx+1+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
     v = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+1+2*nl.ngy, nl.nz+2*nl.ngz))
     w = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+1+2*nl.ngz))
+    qv0 = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
     qv = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, nl.nz+2*nl.ngz))
     surface_t = np.zeros((nl.nx, nl.ny))
 
     # Setup I.C.
     if ic_option == 1:
-        rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, surface_t = setup_ic_option1(rho0, theta0, rho0_theta0,
-                                                                                              pi0, pip, theta, qv,
-                                                                                              u, v, w, surface_t,
-                                                                                              x3d, y3d, z3d)
+        (rho0, theta0, rho0_theta0, pi0, qv0,
+         pip, theta, qv, u, v, w, surface_t) = setup_ic_option1(rho0, theta0, rho0_theta0,
+                                                                pi0, qv0, pip, theta, qv,
+                                                                u, v, w, surface_t,
+                                                                x3d, y3d, z3d)
     # elif ic_option==2:
         # I.C. #2
     else:
@@ -56,12 +58,16 @@ def setup_grid_n_ic(ic_option):
     rho0_theta0 = rho0 * theta0
     theta0_ic = theta0
     # physical state initial condition
-    phys_ic = (rho0_theta0, rho0, theta0, theta, qv, u, v, w, pi0, pip)
+    phys_ic = (rho0_theta0, rho0, theta0, theta, qv0, qv, u, v, w, pi0, pip)
+
     grid_ic = (theta0_ic, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf)
-    return phys_ic, grid_ic
+
+    model_opt = (nl.damp_opt, nl.rad_opt, nl.cor_opt, nl.sfc_opt, nl.pic_opt)    # model options
+
+    return phys_ic, grid_ic, model_opt
 
 
-def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, surface_t, x3d, y3d, z3d):
+def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, qv0, pip, theta, qv, u, v, w, surface_t, x3d, y3d, z3d):
     """ Set up the I.C. of option 1: a warm bubble """
     surface_t[:] = 300.0
     w = w.at[:].set(0.0)
@@ -72,13 +78,13 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, su
     # initial center location of the warm bubble
     xc = 12800.0
     yc = 12800.0
-    zc = 3000.0
+    zc = 2000.0
     # initial bubble radius
     xr = 2000.0
     yr = 2000.0
     zr = 2000.0
+    rh = 0.1
     r = jnp.sqrt(((x3d - xc) / xr)**2 + ((y3d - yc) / yr)**2 + ((z3d - zc) / zr)**2)    # bubble
-    # r = jnp.sqrt(((y3d - yc) / xr)**2 + ((z3d - zc) / zr)**2)
     theta_p = 1.0 * (jnp.cos(r * np.pi/2.0))**2
     theta_p = jnp.where(r > 1.0, 0.0, theta_p)
     theta = theta.at[:].set(theta0 + theta_p)
@@ -88,26 +94,49 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, su
     pi0_bottom = jnp.ones((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, 1))
     pi08w = jnp.concatenate((pi0_bottom, pi0_part), axis=2)
     pi0 = pi0.at[:, :, nl.ngz:-nl.ngz].set(0.5 * (pi08w[:, :, 0:-1] + pi08w[:, :, 1:]))
-    pi0 = pi0.at[:, :, (0, -1)].set(pi0[:, :, (nl.ngz, -nl.ngz)])
+    pi0 = pi0.at[:, :, (0, -1)].set(pi0[:, :, (nl.ngz, -(nl.ngz+1))])
 
     rho0_theta0 = rho0_theta0.at[:].set(pi0**(nl.Cv/nl.Rd) * nl.p00 / nl.Rd)
     rho0 = rho0.at[:].set(rho0_theta0 / theta0)
 
-    d_pi_dz = -nl.g / nl.Cp / theta
-    pi_part = jnp.cumsum(d_pi_dz[:, :, nl.ngz:-nl.ngz], axis=2)*nl.dz + 1.0
-    pi_bottom = jnp.ones((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, 1))
-    pi8w = jnp.concatenate((pi_bottom, pi_part), axis=2)
-    pi = jnp.zeros(pi0.shape)
-    pi = pi.at[:, :, nl.ngz:-nl.ngz].set(0.5 * (pi8w[:, :, 0:-1] + pi8w[:, :, 1:]))
-    pi = pi.at[:, :, (0, -1)].set(pi[:, :, (nl.ngz, -nl.ngz)])
-    pip = pip.at[:].set(pi - pi0)
+    pressure0 = pi0**(nl.Cp / nl.Rd) * nl.p00
+    t0 = theta0 * pi0
+    q0_sat = rslf(pressure0, t0)
+    qv0 = qv0.at[:].set(q0_sat * rh)    # constant RH = 30%
 
+    # first gues of qv0; iterate to ensure hydrostatic balance of the base state
+    qv0_prev = qv0*1.1
+    it = 0
+    while np.max(np.abs((qv0 - qv0_prev)/qv0)) > 1e-9:
+        qv0_prev = qv0
+
+        d_pi0_dz = -nl.g / nl.Cp / (theta0 * (1.0 + nl.repsm1*qv0))
+        pi0_part = jnp.cumsum(d_pi0_dz[:, :, nl.ngz:-nl.ngz], axis=2) * nl.dz + 1.0
+        pi0_bottom = jnp.ones((nl.nx + 2 * nl.ngx, nl.ny + 2 * nl.ngy, 1))
+        pi08w = jnp.concatenate((pi0_bottom, pi0_part), axis=2)
+        pi0 = pi0.at[:, :, nl.ngz:-nl.ngz].set(0.5 * (pi08w[:, :, 0:-1] + pi08w[:, :, 1:]))
+        pi0 = pi0.at[:, :, (0, -1)].set(pi0[:, :, (nl.ngz, -nl.ngz)])
+
+        rho0_theta0 = rho0_theta0.at[:].set(pi0 ** (nl.Cv / nl.Rd) * nl.p00 / nl.Rd)
+        # vapor effect included
+        rho0 = rho0.at[:].set(rho0_theta0 / theta0 / (1.0 + nl.repsm1*qv0))
+
+        pressure0 = pi0 ** (nl.Cp / nl.Rd) * nl.p00
+        t0 = theta0 * pi0
+        q0_sat = rslf(pressure0, t0)
+        qv0 = qv0.at[:].set(q0_sat * rh)
+        it = it + 1
+
+    print("    Hydrostatic balance of base state ensured after %4i iterations" % it)
+
+    pi = (rho0 * theta * (1.0 + nl.repsm1*qv0) * nl.Rd / nl.p00)**(nl.Rd / nl.Cv)    # an estimate of total pi
+    pip = pip.at[:].set(pi - pi0)
     pressure = pi**(nl.Cp / nl.Rd) * nl.p00
     t = theta * pi
     q_sat = rslf(pressure, t)
-    qv = qv.at[:].set(q_sat * 0.3)    # constant RH = 30%
+    qv = qv.at[:].set(q_sat * rh)
 
-    return rho0, theta0, rho0_theta0, pi0, pip, theta, qv, u, v, w, surface_t
+    return rho0, theta0, rho0_theta0, pi0, qv0, pip, theta, qv, u, v, w, surface_t
 
 
 def setup_damping_tau(z3d, z3d4w):

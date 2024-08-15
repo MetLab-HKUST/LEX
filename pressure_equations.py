@@ -147,14 +147,21 @@ def extrapolate_bottom_top(scalar):
     return bottom, top
 
 
-def calculate_rtt(rho0_theta0, theta, buoyancy):
+def calculate_buoyancy(theta0, theta_p, qv0, qv):
+    """ Calculate buoyancy term """
+    b = nl.g * (theta_p / theta0 + nl.repsm1 * (qv - qv0))
+    b8w = interpolate_scalar2w(b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    return b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], b8w
+
+
+def calculate_rtt(rho0_theta0, theta, qv, buoyancy):
     """ Calculate rho0*theta0*theta
 
     Include bottom and top ghost points to save boundary conditions for rho*theta_tilde*theta*dpi/dz,
     which can be obtained by assuming w=0 at the bottom and top interface in the w equation.
     Assuming buoyancy term has no ghost points
     """
-    rtt_part = rho0_theta0[:, :, nl.ngz:-nl.ngz] * theta[:, :, nl.ngz:-nl.ngz]
+    rtt_part = rho0_theta0[:, :, nl.ngz:-nl.ngz] * theta[:, :, nl.ngz:-nl.ngz] * (1.0 + nl.repsm1*qv[:, :, nl.ngz:-nl.ngz])
     bottom, top = extrapolate_bottom_top(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * buoyancy / nl.Cp)
     bottom_x = jnp.concatenate((bottom[-nl.ngx:, :, 0], bottom[:, :, 0], bottom[0:nl.ngx, :, 0]), axis=0)
     bottom_xy = jnp.concatenate((bottom_x[:, -nl.ngy:], bottom_x, bottom_x[:, 0:nl.ngy]), axis=1)
@@ -164,11 +171,3 @@ def calculate_rtt(rho0_theta0, theta, buoyancy):
     top_xy = jnp.reshape(top_xy, (nl.nx + 2 * nl.ngx, nl.ny + 2 * nl.ngy, 1))
     rtt = jnp.concatenate((bottom_xy, rtt_part, top_xy), axis=2)
     return rtt
-
-
-def calculate_buoyancy(theta0, theta_p, qv):
-    """ Calculate buoyancy term """
-    ###### b = nl.g * (theta_p / theta0 + nl.repsm1 * qv)
-    b = nl.g * (theta_p / theta0)    # ignore water vapor
-    b8w = interpolate_scalar2w(b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
-    return b[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz], b8w

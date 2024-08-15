@@ -33,7 +33,7 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     itime = nc_file.createVariable("time", np.float32, ("time",))
     itime.long_name = "time (s)"
 
-    (rho0_theta0_prev, rho0_prev, theta0_prev,
+    (rho0_theta0_prev, rho0_prev, theta0_prev, qv0_prev,
      theta_prev, theta_now, pi0_prev, pip_prev,
      rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres,
      qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now,
@@ -63,6 +63,11 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     theta0_1[:, :, :, :] = np.reshape(theta0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                       (1, x_size, y_size, z_size))
 
+    qv0_1 = nc_file.createVariable("qv0_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    qv0_1.long_name = "qv0 for the current time"
+    qv0_1[:, :, :, :] = np.reshape(qv0_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+                                      (1, x_size, y_size, z_size))
+
     theta_1 = nc_file.createVariable("theta_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     theta_1.long_name = "theta for the current time"
     theta_1[:, :, :, :] = np.reshape(theta_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
@@ -83,25 +88,25 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     pip_1[:, :, :, :] = np.reshape(pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                    (1, x_size, y_size, z_size))
 
-    rhs_1 = nc_file.createVariable("rhs_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
-    rhs_1.long_name = "rhs of pressure equation"
-    rhs_1[:, :, :, :] = np.reshape(rhs, (1, x_size, y_size, z_size))
+    # rhs_1 = nc_file.createVariable("rhs_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    # rhs_1.long_name = "rhs of pressure equation"
+    # rhs_1[:, :, :, :] = np.reshape(rhs, (1, x_size, y_size, z_size))
 
-    rhs_adv_1 = nc_file.createVariable("rhs_adv_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
-    rhs_adv_1.long_name = "rhs adv of pressure equation"
-    rhs_adv_1[:, :, :, :] = np.reshape(rhs_adv, (1, x_size, y_size, z_size))
+    # rhs_adv_1 = nc_file.createVariable("rhs_adv_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    # rhs_adv_1.long_name = "rhs adv of pressure equation"
+    # rhs_adv_1[:, :, :, :] = np.reshape(rhs_adv, (1, x_size, y_size, z_size))
 
-    rhs_cor_1 = nc_file.createVariable("rhs_cor", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
-    rhs_cor_1.long_name = "rhs Coriolis of pressure equation"
-    rhs_cor_1[:, :, :, :] = np.reshape(rhs_cor, (1, x_size, y_size, z_size))
+    # rhs_cor_1 = nc_file.createVariable("rhs_cor", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    # rhs_cor_1.long_name = "rhs Coriolis of pressure equation"
+    # rhs_cor_1[:, :, :, :] = np.reshape(rhs_cor, (1, x_size, y_size, z_size))
 
-    rhs_buoy_1 = nc_file.createVariable("rhs_buoy_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
-    rhs_buoy_1.long_name = "rhs buoyancy of pressure equation"
-    rhs_buoy_1[:, :, :, :] = np.reshape(rhs_buoy, (1, x_size, y_size, z_size))
+    # rhs_buoy_1 = nc_file.createVariable("rhs_buoy_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    # rhs_buoy_1.long_name = "rhs buoyancy of pressure equation"
+    # rhs_buoy_1[:, :, :, :] = np.reshape(rhs_buoy, (1, x_size, y_size, z_size))
 
-    rhs_pres_1 = nc_file.createVariable("rhs_pres_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
-    rhs_pres_1.long_name = "rhs buoyancy of pressure equation"
-    rhs_pres_1[:, :, :, :] = np.reshape(rhs_pres, (1, x_size, y_size, z_size))
+    # rhs_pres_1 = nc_file.createVariable("rhs_pres_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    # rhs_pres_1.long_name = "rhs buoyancy of pressure equation"
+    # rhs_pres_1[:, :, :, :] = np.reshape(rhs_pres, (1, x_size, y_size, z_size))
     
     qv_1 = nc_file.createVariable("qv_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
     qv_1.long_name = "qv for the current time"
@@ -143,33 +148,33 @@ def save2nc(phys_state, grid_ic, sprint_i, model_time):
     pc_1.long_name = "pi' correction constant for the current time"
     pc_1[:] = pip_const
 
-    tau_x_1 = nc_file.createVariable("tau_x_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
-    tau_x_1.long_name = "tau_x for the current time"
-    tau_x_1[:, :, :] = np.reshape(tau_x, (1, x_size, y_size))
+    # tau_x_1 = nc_file.createVariable("tau_x_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
+    # tau_x_1.long_name = "tau_x for the current time"
+    # tau_x_1[:, :, :] = np.reshape(tau_x, (1, x_size, y_size))
 
-    tau_y_1 = nc_file.createVariable("tau_y_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
-    tau_y_1.long_name = "tau_y for the current time"
-    tau_y_1[:, :, :] = np.reshape(tau_y, (1, x_size, y_size))
+    # tau_y_1 = nc_file.createVariable("tau_y_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
+    # tau_y_1.long_name = "tau_y for the current time"
+    # tau_y_1[:, :, :] = np.reshape(tau_y, (1, x_size, y_size))
 
-    sen_1 = nc_file.createVariable("sen_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
-    sen_1.long_name = "sensible heat for the current time"
-    sen_1[:, :, :] = np.reshape(sen, (1, x_size, y_size))
+    # sen_1 = nc_file.createVariable("sen_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
+    # sen_1.long_name = "sensible heat for the current time"
+    # sen_1[:, :, :] = np.reshape(sen, (1, x_size, y_size))
 
-    evap_1 = nc_file.createVariable("evap_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
-    evap_1.long_name = "evaporation for the current time"
-    evap_1[:, :, :] = np.reshape(evap, (1, x_size, y_size))
+    # evap_1 = nc_file.createVariable("evap_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
+    # evap_1.long_name = "evaporation for the current time"
+    # evap_1[:, :, :] = np.reshape(evap, (1, x_size, y_size))
 
-    t_ref_1 = nc_file.createVariable("T_ref_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
-    t_ref_1.long_name = "temperature at reference height (2m) for the current time"
-    t_ref_1[:, :, :] = np.reshape(t_ref, (1, x_size, y_size))
+    # t_ref_1 = nc_file.createVariable("T_ref_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
+    # t_ref_1.long_name = "temperature at reference height (2m) for the current time"
+    # t_ref_1[:, :, :] = np.reshape(t_ref, (1, x_size, y_size))
 
-    q_ref_1 = nc_file.createVariable("q_ref_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
-    q_ref_1.long_name = "mixing ratio at reference height (2m) for the current time"
-    q_ref_1[:, :, :] = np.reshape(q_ref, (1, x_size, y_size))
+    # q_ref_1 = nc_file.createVariable("q_ref_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
+    # q_ref_1.long_name = "mixing ratio at reference height (2m) for the current time"
+    # q_ref_1[:, :, :] = np.reshape(q_ref, (1, x_size, y_size))
 
-    u10_1 = nc_file.createVariable("u10_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
-    u10_1.long_name = "wind speed at reference height (10m) for the current time"
-    u10_1[:, :, :] = np.reshape(u10n, (1, x_size, y_size))
+    # u10_1 = nc_file.createVariable("u10_now", np.float32, ("time", "x", "y"), fill_value=1.0e36)
+    # u10_1.long_name = "wind speed at reference height (10m) for the current time"
+    # u10_1[:, :, :] = np.reshape(u10n, (1, x_size, y_size))
 
     nc_file.close()
 

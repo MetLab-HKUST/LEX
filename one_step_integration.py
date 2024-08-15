@@ -58,20 +58,39 @@ def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w
     # pip, info = jax.scipy.sparse.linalg.gmres(
     #     lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
     #     rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-    #     tol=tol, atol=atol, maxiter=200, solve_method='incremental')
-
-    pip, info = jax.scipy.sparse.linalg.bicgstab(lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
-                                           rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                                           tol=tol, atol=atol, maxiter=200)
+    #     tol=tol, atol=atol, maxiter=100, solve_method='incremental')
+    pip, info = jax.scipy.sparse.linalg.bicgstab(
+        lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
+        rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
+        tol=tol, atol=atol, maxiter=100)
 
     return pip, info, rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres
 
 
 def correct_pip_constant(rho0_now, pip_now, x3d4u, y3d4v, z3d4w):
-    """ Add a constant to the solution to the Poisson-like equation for pressure perturbations """
+    """ Add a constant to ensure pi' sum is zero """
     numerator = -space_integration(rho0_now * pip_now, x3d4u, y3d4v, z3d4w)
     denominator = space_integration(rho0_now, x3d4u, y3d4v, z3d4w)
     return numerator/denominator
+
+
+def correct_pip_constant2(pi0_now, theta0_now, qv0_now, pip_prev, theta_prev, qv_prev, theta_now, qv_now, pip_now, x3d4u, y3d4v, z3d4w):
+    """ Add a constant to ensure total mass change is zero (to the accuracy of linearized approximation) """
+    beta = nl.p00 * nl.Cv / nl.Rd**2 * pi0_now**((nl.Cv - nl.Rd) / nl.Rd)
+    theta_r0 = theta0_now * (1.0 + nl.repsm1 * qv0_now)    # base state density potential temperature
+    theta_r1 = theta_prev * (1.0 + nl.repsm1 * qv_prev) - theta_r0
+    theta_r2 = theta_now * (1.0 + nl.repsm1 * qv_now) - theta_r0
+    theta_r1a = jnp.where((theta_r1 < 1.0e-6) & (theta_r1>= 0.0), 1.0e-6, theta_r1)
+    theta_r1b = jnp.where((theta_r1a > -1.0e-6) & (theta_r1a < 0.0), -1.0e-6, theta_r1a)
+    theta_r2a = jnp.where((theta_r2 < 1.0e-6) & (theta_r2>= 0.0), 1.0e-6, theta_r2)
+    theta_r2b = jnp.where((theta_r2a > -1.0e-6) & (theta_r2a < 0.0), -1.0e-6, theta_r2a)
+    numerator = space_integration(beta * pip_prev / theta_r1b, x3d4u, y3d4v, z3d4w) - space_integration(
+        beta * pip_now / theta_r2b, x3d4u, y3d4v, z3d4w)
+    denominator = space_integration(beta / theta_r2b, x3d4u, y3d4v, z3d4w)
+    denominator_a = jnp.where((denominator < 1.0e-6) & (denominator>= 0.0), 1.0e-6, denominator)
+    denominator_b = jnp.where((denominator_a > -1.0e-6) & (denominator_a < 0.0), -1.0e-6, denominator_a)
+    # these statements are trying to prevent dividing by zero issues. The threshold needs tuning
+    return numerator/denominator_b
 
 
 def update_momentum_eqn_euler(u_now, v_now, w_now, pi0_now, pip_now, theta_now, adv4u, adv4v, adv4w, fu, fv, b8w, x3d,
