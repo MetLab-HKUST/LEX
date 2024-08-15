@@ -76,8 +76,8 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, qv0, pip, theta, qv, u, v, 
 
     theta0 = theta0.at[:].set(300.0)
     # initial center location of the warm bubble
-    xc = 12800.0
-    yc = 12800.0
+    xc = 12000.0
+    yc = 12000.0
     zc = 2000.0
     # initial bubble radius
     xr = 2000.0
