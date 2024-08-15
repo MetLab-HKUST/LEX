@@ -87,6 +87,13 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, qv0, pip, theta, qv, u, v, 
     r = jnp.sqrt(((x3d - xc) / xr)**2 + ((y3d - yc) / yr)**2 + ((z3d - zc) / zr)**2)    # bubble
     theta_p = 1.0 * (jnp.cos(r * np.pi/2.0))**2
     theta_p = jnp.where(r > 1.0, 0.0, theta_p)
+    if nl.rand_opt:
+        # add random perturbations to theta
+        seed = 2024
+        key = jax.random.key(seed)
+        noise = jax.random.uniform(key, shape=theta_p.shape, minval=0.5, maxval=1.5)
+        theta_p = theta_p * noise
+
     theta = theta.at[:].set(theta0 + theta_p)
 
     d_pi0_dz = -nl.g / nl.Cp / theta0

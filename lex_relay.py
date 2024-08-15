@@ -11,7 +11,7 @@ import time
 # setup initial conditions
 print("Setting up I.C.")
 startTime = time.time()
-physIC, gridIC, modelOpt = setl.setup_grid_n_ic(nl.icOption)
+physIC, gridIC, modelOpt = setl.setup_grid_n_ic(nl.ic_option)
 timeSetup = time.time() - startTime
 
 # do first-step integration
