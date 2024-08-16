@@ -22,7 +22,7 @@ fileNameFormat = "experiments/lex_out_%0.4i.nc"
 
 # Initial condition choice
 ic_option = 1
-rand_opt = True
+rand_opt = False
 
 # Coriolis force
 cor_opt = False

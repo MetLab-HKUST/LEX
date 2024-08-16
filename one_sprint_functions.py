@@ -12,83 +12,27 @@ import namelist_n_constants as nl
 
 
 @partial(jax.jit, static_argnames=['model_opt'])
-def first_step_integration(phys_ic, grid_ic, model_opt):
-    """ The first step using Euler method """
-    (rho0_theta0_now, rho0_now, theta0_now, theta_now, qv0_now, qv_now, u_now, v_now, w_now, pi0_now, pip_prev) = phys_ic
-    (theta0_ic, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf) = grid_ic
-    (damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt) = model_opt
+def first_step_integration_rk4(phys_ic, grid_ic, model_opt):
+    """ The first step using RK4 method """
+    xi1 = phys_ic
+    xi2, tend1, pip_now, rhs_terms, sfc_etc = one.rk4_sub_step(xi1, grid_ic, model_opt, nl.dt/2.0)
+    xi3, tend2, _, _, _ = one.rk4_sub_step(xi2, grid_ic, model_opt, nl.dt/2.0)
+    xi4, tend3, _, _, _ = one.rk4_sub_step(xi3, grid_ic, model_opt, nl.dt)
+    _, tend4, _, _, _ = one.rk4_sub_step(xi4, grid_ic, model_opt, nl.dt)
+    tends = tuple(map(lambda f1, f2, f3, f4: nl.dt/6.0 * (f1 + 2.0*f2 + 2.0*f3 + f4),
+                      tend1, tend2, tend3, tend4))
+    (d_theta, du, dv, dw, d_qv) = tends
+    (rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres) = rhs_terms
+    (info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = sfc_etc
 
-    # update theta equation
-    if rad_opt:
-        heating_now = one.get_heating(theta_now, theta0_ic)
-    else:
-        heating_now = np.zeros((nl.nx, nl.ny, nl.nz))    # ignore heating for the warm bubble case
+    (rho0_theta0_now, rho0_now, theta0_now,
+        theta_now, qv0_now, qv_now, u_now, v_now, w_now, pi0_now, pip_prev) = phys_ic
 
-    flow_divergence = adv.get_divergence(rho0_now, u_now, v_now, w_now, x3d4u, y3d4v, z3d4w)
-    if sfc_opt:
-        z_bottom = z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
-        u_bottom = 0.5 * (u_now[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz] +
-                          u_now[nl.ngx + 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz])
-        v_bottom = 0.5 * (v_now[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy + 1), nl.ngz] +
-                          v_now[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz])
-        theta_bottom = theta_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
-        q_bottom = qv_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
-        rho_bottom = rho0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
-        tau_x, tau_y, sen, evap, t_ref, q_ref, u10n = bc.atm_ocn_flux(z_bottom, u_bottom, v_bottom, theta_bottom, q_bottom,
-                                                                      rho_bottom, surface_t)
-    else:
-        tau_x = np.zeros((nl.nx, nl.ny))
-        tau_y = np.zeros((nl.nx, nl.ny))
-        sen = np.zeros((nl.nx, nl.ny))
-        evap = np.zeros((nl.nx, nl.ny))
-        t_ref = np.zeros((nl.nx, nl.ny))
-        q_ref = np.zeros((nl.nx, nl.ny))
-        u10n = np.zeros((nl.nx, nl.ny))
-
-    theta_next = one.update_theta_euler(rho0_now, theta_now, u_now, v_now, w_now, flow_divergence, sen / nl.Cp,
-                                        heating_now, x3d4u, y3d4v, z3d4w)
-
-    # update pi' equation
-    theta_p_now = theta_now - theta0_now
-    buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0_now, theta_p_now, qv0_now, qv_now) 
-    rtt = pres_eqn.calculate_rtt(rho0_theta0_now, theta_now, qv_now, buoyancy)
-    adv4u, adv4v, adv4w = one.prep_momentum_eqn(rho0_now, u_now, v_now, w_now, flow_divergence, tau_x, tau_y,
-                                                x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
-    if cor_opt:
-        fu, fv = pres_grad.calculate_coriolis_force(u_now, v_now)
-    else:
-        fu = np.zeros((nl.nx, nl.ny+1, nl.nz))
-        fv = np.zeros((nl.nx+1, nl.ny, nl.nz))
-
-    pip_now, info, rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres = one.solve_pres_eqn(
-        pip_prev, rho0_theta0_now, pi0_now, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
-        fu, fv, buoyancy, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
-    pip_now = one.padding3_array(pip_now)
-
-    if pic_opt:
-        pip_const = one.correct_pip_constant2(pi0_now, theta0_now, qv0_now,
-                                          pip_prev, theta_now, qv_now, theta_now, qv_now, pip_now, x3d4u, y3d4v, z3d4w)
-        # pip_const is the correction constant
-        pip_now = pip_now + pip_const
-    else:
-        pip_const = -999.9
-        
-    # update momentum equations
-    theta_rho = theta_now * (1.0 + nl.repsm1*qv_now)    # density potential temperature
-    u_next, v_next, w_next = one.update_momentum_eqn_euler(u_now, v_now, w_now, pi0_now, pip_now, theta_rho,
-                                                           adv4u, adv4v, adv4w, fu, fv, b8w, x3d, y3d, z3d)
-    # water vapor; cloud variable equations in the future
-    # rho_now = one.get_rho(pi0_now, pip_now, theta_rho, qv_now)    # real microphysics may need it
-    qv_next = one.update_qv_euler(rho0_now, qv_now, u_now, v_now, w_now, flow_divergence, evap, x3d4u, y3d4v, z3d4w)
-
-    # Rayleigh damping
-    if damp_opt:
-        u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
-        u_next = u_next + one.padding3_array(u_tend*nl.dt)
-        v_next = v_next + one.padding3_array(v_tend*nl.dt)
-        w_next = w_next + one.padding3_array(w_tend*nl.dt)
-        theta_next = theta_next + one.padding3_array(theta_tend*nl.dt)
-    # Ignore for the warm buble case
+    theta_next = theta_now + one.padding3_array(d_theta)
+    u_next = u_now + one.padding3_array(du)
+    v_next = v_now + one.padding3_array(dv)
+    w_next = w_now + one.padding3_array(dw)
+    qv_next = qv_now + one.padding3_array(d_qv)
 
     # replace 'prev' and 'now' by 'now‘ and 'next'
     theta_prev = theta_now

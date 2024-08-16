@@ -16,7 +16,7 @@ timeSetup = time.time() - startTime
 
 # do first-step integration
 wallTime = time.time()
-physState = sp.first_step_integration(physIC, gridIC, modelOpt)
+physState = sp.first_step_integration_rk4(physIC, gridIC, modelOpt)
 time1stStep = time.time() - wallTime
 print("First step integration done.")
 
