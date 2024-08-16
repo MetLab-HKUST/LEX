@@ -11,19 +11,20 @@ import time
 # setup initial conditions
 print("Setting up I.C.")
 startTime = time.time()
-physIC, gridIC, modelOpt = setl.setup_grid_n_ic(nl.ic_option)
+physState, baseState, grids, modelOpt = setl.setup_grid_n_ic(nl.ic_option)
 timeSetup = time.time() - startTime
 
 # do first-step integration
 wallTime = time.time()
-physState = sp.first_step_integration_rk4(physIC, gridIC, modelOpt)
+physState, sfcOthers = sp.first_step_integration_rk4(physState, baseState, grids, modelOpt)
 time1stStep = time.time() - wallTime
 print("First step integration done.")
 
 # save first two time slices
 modelTime = 0.0
 wallTime = time.time()
-write.save2nc(physState, gridIC, 0, modelTime)
+write.save2nc_base(baseState, grids)
+write.save2nc(physState, sfcOthers, grids, 0, modelTime)
 timeWrite = time.time() - wallTime
 
 # do sprints
@@ -32,7 +33,7 @@ timeSprints = 0.0
 for i in range(nl.relay_n):
     print("Sprint #%0.4i" % (i+1))
     wallTime = time.time()
-    physState = sp.leapfrog_sprint(physState, gridIC, modelOpt)
+    physState, sfcOthers = sp.leapfrog_sprint(physState, baseState, grids, modelOpt)
     if i > 0:
         timeSprints = time.time() - wallTime + timeSprints
     else:
@@ -40,7 +41,7 @@ for i in range(nl.relay_n):
 
     wallTime = time.time()
     modelTime = np.round((i+1) * nl.sprint_n * nl.dt, decimals=6)
-    write.save2nc(physState, gridIC, (i+1), modelTime)
+    write.save2nc(physState, sfcOthers, grids, (i+1), modelTime)
     timeWrite = time.time() - wallTime + timeWrite
 
 endTime = time.time()

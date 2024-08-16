@@ -9,7 +9,8 @@ def pressure_gradient_force(pi0, pip, theta, x3d, y3d, z3d):
 
     Assuming the input arrays have ghost points.
     """
-    pi_total = pi0 + pip
+    pi_total = pip    # if pi0 is horizontally uniform
+    # pi_total = pi0 + pip
     dpi_dx = (pi_total[nl.ngx:-(nl.ngx-1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
               pi_total[nl.ngx-1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) / (
               x3d[nl.ngx:-(nl.ngx-1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -

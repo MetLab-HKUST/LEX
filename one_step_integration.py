@@ -13,20 +13,21 @@ import boundary_conditions as bc
 
 
 @partial(jax.jit, static_argnames=['model_opt'])
-def rk4_sub_step(phys_ic, grid_ic, model_opt, dt):
+def rk4_sub_step(phys_state, base_state, grids, model_opt, dt):
     """ one sub-step for the RK4 integration, which is used for the first step integration """
-    (rho0_theta0_now, rho0_now, theta0_now,
-        theta_now, qv0_now, qv_now, u_now, v_now, w_now, pi0_now, pip_prev) = phys_ic
-    (theta0_ic, surface_t, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf) = grid_ic
-    (damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt) = model_opt
+
+    theta_now, u_now, v_now, w_now, pip_prev, qv_now = phys_state
+    rho0_theta0, rho0, theta0, pi0, qv0, surface_t = base_state
+    x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf = grids
+    damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt = model_opt
 
     # update theta equation
     if rad_opt:
-        heating_now = get_heating(theta_now, theta0_ic)
+        heating_now = get_heating(theta_now, theta0)
     else:
         heating_now = np.zeros((nl.nx, nl.ny, nl.nz))  # ignore heating for the warm bubble case
 
-    flow_divergence = adv.get_divergence(rho0_now, u_now, v_now, w_now, x3d4u, y3d4v, z3d4w)
+    flow_divergence = adv.get_divergence(rho0, u_now, v_now, w_now, x3d4u, y3d4v, z3d4w)
 
     if sfc_opt:
         z_bottom = z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
@@ -36,10 +37,9 @@ def rk4_sub_step(phys_ic, grid_ic, model_opt, dt):
                           v_now[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz])
         theta_bottom = theta_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
         q_bottom = qv_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
-        rho_bottom = rho0_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
+        rho_bottom = rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz]
         tau_x, tau_y, sen, evap, t_ref, q_ref, u10n = bc.atm_ocn_flux(z_bottom, u_bottom, v_bottom, theta_bottom,
-                                                                      q_bottom,
-                                                                      rho_bottom, surface_t)
+                                                                      q_bottom, rho_bottom, surface_t)
     else:
         tau_x = np.zeros((nl.nx, nl.ny))
         tau_y = np.zeros((nl.nx, nl.ny))
@@ -49,42 +49,40 @@ def rk4_sub_step(phys_ic, grid_ic, model_opt, dt):
         q_ref = np.zeros((nl.nx, nl.ny))
         u10n = np.zeros((nl.nx, nl.ny))
 
-    theta_next, d_theta_dt = update_theta_euler(rho0_now, theta_now, u_now, v_now, w_now, flow_divergence, sen / nl.Cp,
-                                        heating_now, x3d4u, y3d4v, z3d4w, dt)
+    theta_next, d_theta_dt = update_theta_euler(rho0, theta_now, u_now, v_now, w_now, flow_divergence, sen / nl.Cp,
+                                                heating_now, x3d4u, y3d4v, z3d4w, dt)
 
     # update pi' equation
-    theta_p_now = theta_now - theta0_now
-    buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0_now, theta_p_now, qv0_now, qv_now)
-    rtt = pres_eqn.calculate_rtt(rho0_theta0_now, theta_now, qv_now, buoyancy)
-    adv4u, adv4v, adv4w = prep_momentum_eqn(rho0_now, u_now, v_now, w_now, flow_divergence, tau_x, tau_y,
-                                                x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
+    theta_p_now = theta_now - theta0
+    buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0, theta_p_now, qv0, qv_now)
+    rtt = pres_eqn.calculate_rtt(rho0_theta0, theta_now, qv_now, buoyancy)
+    adv4u, adv4v, adv4w = prep_momentum_eqn(rho0, u_now, v_now, w_now, flow_divergence, tau_x, tau_y,
+                                            x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
     if cor_opt:
         fu, fv = pres_grad.calculate_coriolis_force(u_now, v_now)
     else:
         fu = np.zeros((nl.nx, nl.ny + 1, nl.nz))
         fv = np.zeros((nl.nx + 1, nl.ny, nl.nz))
 
-    pip_now, info, rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres = solve_pres_eqn(
-        pip_prev, rho0_theta0_now, pi0_now, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
-        fu, fv, buoyancy, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
+    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
+                                   fu, fv, buoyancy, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
     pip_now = padding3_array(pip_now)
-
-    if pic_opt:
-        pip_const = correct_pip_constant2(pi0_now, theta0_now, qv0_now,
-                                              pip_prev, theta_now, qv_now, theta_now, qv_now, pip_now, x3d4u, y3d4v,
-                                              z3d4w)
-        # pip_const is the correction constant
+    if pic_opt:  # correct pi'
+        pip_const = correct_pip_constant2(pi0, theta0, qv0, pip_prev, theta_now, qv_now, theta_now, qv_now, pip_now,
+                                          x3d4u, y3d4v, z3d4w)
         pip_now = pip_now + pip_const
     else:
         pip_const = -999.9
 
     # update momentum equations
     theta_rho = theta_now * (1.0 + nl.repsm1 * qv_now)  # density potential temperature
-    u_next, v_next, w_next, du_dt, dv_dt, dw_dt = update_momentum_eqn_euler(u_now, v_now, w_now, pi0_now, pip_now,
-                                                      theta_rho, adv4u, adv4v, adv4w, fu, fv, b8w, x3d, y3d, z3d, dt)
+    u_next, v_next, w_next, du_dt, dv_dt, dw_dt = update_momentum_eqn_euler(u_now, v_now, w_now, pi0, pip_now,
+                                                                            theta_rho, adv4u, adv4v, adv4w, fu, fv, b8w,
+                                                                            x3d, y3d, z3d, dt)
     # water vapor; cloud variable equations in the future
     # rho_now = one.get_rho(pi0_now, pip_now, theta_rho, qv_now)    # real microphysics may need it
-    qv_next, d_qv_dt = update_qv_euler(rho0_now, qv_now, u_now, v_now, w_now, flow_divergence, evap, x3d4u, y3d4v, z3d4w, dt)
+    qv_next, d_qv_dt = update_qv_euler(rho0, qv_now, u_now, v_now, w_now, flow_divergence, evap, x3d4u, y3d4v,
+                                       z3d4w, dt)
 
     # Rayleigh damping
     if damp_opt:
@@ -98,13 +96,11 @@ def rk4_sub_step(phys_ic, grid_ic, model_opt, dt):
         theta_next = theta_next + padding3_array(theta_tend * dt)
         # Ignore for the warm buble case
 
-    phys_ic_new = (rho0_theta0_now, rho0_now, theta0_now,
-        theta_next, qv0_now, qv_next, u_next, v_next, w_next, pi0_now, pip_now)
+    phys_state = (theta_next, u_next, v_next, w_next, pip_now, qv_next)
     tends = (d_theta_dt, du_dt, dv_dt, dw_dt, d_qv_dt)
-    rhs_terms = (rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres)
     sfc_etc = (info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
 
-    return phys_ic_new, tends, pip_now, rhs_terms, sfc_etc
+    return phys_state, tends, sfc_etc
 
 
 def update_theta_euler(rho0_now, theta_now, u_now, v_now, w_now, flow_divergence, sfc_flux, heating, x3d4u, y3d4v,
@@ -146,8 +142,9 @@ def update_qv_leapfrog(qv_prev, rho0_now, qv_now, u_now, v_now, w_now, flow_dive
 def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
                    x3d, x3d4u, y3d, y3d4v, z3d, z3d4w):
     """ Solve the Poisson-like equation for pressure perturbations, pi\' (pip) """
-    rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres = pres_eqn.rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
-                                            x3d, x3d4u, y3d, y3d4v, z3d4w)
+    rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres = pres_eqn.rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u,
+                                                                                  adv4v, adv4w, fu, fv, buoyancy,
+                                                                                  x3d, x3d4u, y3d, y3d4v, z3d4w)
 
     tol = 1.0e-4  # the tolerance level needs to be tested and tuned.
     atol = 1.0e-9
@@ -157,37 +154,38 @@ def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w
     #     rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
     #     tol=tol, atol=atol, maxiter=100, solve_method='incremental')
     pip, info = jax.scipy.sparse.linalg.bicgstab(
-        lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
+        lambda beta: pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
         rhs, x0=pip_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
         tol=tol, atol=atol, maxiter=100)
 
-    return pip, info, rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres
+    return pip, info
 
 
 def correct_pip_constant(rho0_now, pip_now, x3d4u, y3d4v, z3d4w):
     """ Add a constant to ensure pi' sum is zero """
     numerator = -space_integration(rho0_now * pip_now, x3d4u, y3d4v, z3d4w)
     denominator = space_integration(rho0_now, x3d4u, y3d4v, z3d4w)
-    return numerator/denominator
+    return numerator / denominator
 
 
-def correct_pip_constant2(pi0_now, theta0_now, qv0_now, pip_prev, theta_prev, qv_prev, theta_now, qv_now, pip_now, x3d4u, y3d4v, z3d4w):
+def correct_pip_constant2(pi0_now, theta0_now, qv0_now, pip_prev, theta_prev, qv_prev, theta_now, qv_now, pip_now,
+                          x3d4u, y3d4v, z3d4w):
     """ Add a constant to ensure total mass change is zero (to the accuracy of linearized approximation) """
-    beta = nl.p00 * nl.Cv / nl.Rd**2 * pi0_now**((nl.Cv - nl.Rd) / nl.Rd)
-    theta_r0 = theta0_now * (1.0 + nl.repsm1 * qv0_now)    # base state density potential temperature
+    beta = nl.p00 * nl.Cv / nl.Rd ** 2 * pi0_now ** ((nl.Cv - nl.Rd) / nl.Rd)
+    theta_r0 = theta0_now * (1.0 + nl.repsm1 * qv0_now)  # base state density potential temperature
     theta_r1 = theta_prev * (1.0 + nl.repsm1 * qv_prev) - theta_r0
     theta_r2 = theta_now * (1.0 + nl.repsm1 * qv_now) - theta_r0
-    theta_r1a = jnp.where((theta_r1 < 1.0e-6) & (theta_r1>= 0.0), 1.0e-6, theta_r1)
+    theta_r1a = jnp.where((theta_r1 < 1.0e-6) & (theta_r1 >= 0.0), 1.0e-6, theta_r1)
     theta_r1b = jnp.where((theta_r1a > -1.0e-6) & (theta_r1a < 0.0), -1.0e-6, theta_r1a)
-    theta_r2a = jnp.where((theta_r2 < 1.0e-6) & (theta_r2>= 0.0), 1.0e-6, theta_r2)
+    theta_r2a = jnp.where((theta_r2 < 1.0e-6) & (theta_r2 >= 0.0), 1.0e-6, theta_r2)
     theta_r2b = jnp.where((theta_r2a > -1.0e-6) & (theta_r2a < 0.0), -1.0e-6, theta_r2a)
     numerator = space_integration(beta * pip_prev / theta_r1b, x3d4u, y3d4v, z3d4w) - space_integration(
         beta * pip_now / theta_r2b, x3d4u, y3d4v, z3d4w)
     denominator = space_integration(beta / theta_r2b, x3d4u, y3d4v, z3d4w)
-    denominator_a = jnp.where((denominator < 1.0e-6) & (denominator>= 0.0), 1.0e-6, denominator)
+    denominator_a = jnp.where((denominator < 1.0e-6) & (denominator >= 0.0), 1.0e-6, denominator)
     denominator_b = jnp.where((denominator_a > -1.0e-6) & (denominator_a < 0.0), -1.0e-6, denominator_a)
     # these statements are trying to prevent dividing by zero issues. The threshold needs tuning
-    return numerator/denominator_b
+    return numerator / denominator_b
 
 
 def update_momentum_eqn_euler(u_now, v_now, w_now, pi0_now, pip_now, theta_now, adv4u, adv4v, adv4w, fu, fv, b8w, x3d,
@@ -256,7 +254,7 @@ def compute_theta_tendency(rho0, theta, u, v, w, flow_divergence, sfc_flux, heat
 
 def compute_qv_tendency(rho0, qv, u, v, w, flow_divergence, sfc_flux, x3d4u, y3d4v, z3d4w):
     """ Compute the tendency for qv """
-    weps = 1.0e-18  #  CM1 weps for qv equation is 1e-20, but that leads to NaN in LEX, so we use this larger value
+    weps = 1.0e-18  # CM1 weps for qv equation is 1e-20, but that leads to NaN in LEX, so we use this larger value
     adv_qv = adv.advection_scalar(rho0, qv, u, v, w, weps, flow_divergence, sfc_flux, x3d4u, y3d4v, z3d4w)
     tendency = adv_qv  # + microphysics in the future
     return tendency
@@ -275,18 +273,21 @@ def get_heating(theta, theta0_ic):
 
 def space_integration(scalar, x3d4u, y3d4v, z3d4w):
     """ Compute the spatial integration of a scalar """
-    dx = x3d4u[nl.ngx+1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] - x3d4u[nl.ngx:-(nl.ngx+1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
-    dy = y3d4v[nl.ngx:-nl.ngx, nl.ngy+1:-nl.ngy, nl.ngz:-nl.ngz] - y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy+1), nl.ngz:-nl.ngz]
-    dz = z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] - z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz+1)]
+    dx = x3d4u[nl.ngx + 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] - x3d4u[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy,
+                                                                           nl.ngz:-nl.ngz]
+    dy = y3d4v[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz:-nl.ngz] - y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy + 1),
+                                                                           nl.ngz:-nl.ngz]
+    dz = z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] - z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy,
+                                                                           nl.ngz:-(nl.ngz + 1)]
     return jnp.sum(scalar[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * dx * dy * dz)
 
 
 def get_rho(pi0, pip, theta, qv):
     """ Compute density """
     pi = pi0 + pip
-    t = pi * theta    # temperature
-    p = pi**(nl.Cp / nl.Rd) * nl.p00
-    rho = p / nl.Rd / ((1.0 + nl.repsm1*qv) * t)
+    t = pi * theta  # temperature
+    p = pi ** (nl.Cp / nl.Rd) * nl.p00
+    rho = p / nl.Rd / ((1.0 + nl.repsm1 * qv) * t)
     return rho
 
 
