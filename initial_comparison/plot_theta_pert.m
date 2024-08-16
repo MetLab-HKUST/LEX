@@ -1,17 +1,17 @@
 %%% This script plots the warm bubble case in CM1 and LEX
 %% first row: time = 0.0 min
-thp_cm1 = ncread("CM1_dx100dz100_no_noise/cm1out_000001.nc", "thpert");
-thp_lex1 = ncread("LEX_dx100dz100_no_noise/lex_out_0000.nc", "theta_now") - ...
-    ncread("LEX_dx100dz100_no_noise/lex_out_0000.nc", "theta0_now");
-thp_lex2 = ncread("LEX_dx600dz300_no_noise/lex_out_0000.nc", "theta_now") - ...
-    ncread("LEX_dx600dz300_no_noise/lex_out_0000.nc", "theta0_now");
+thp_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000001.nc", "thpert");
+thp_lex1 = ncread("LEX_dx100dz100_no_noise\lex_out_0000.nc", "theta_now") - ...
+    ncread("LEX_dx100dz100_no_noise\lex_reference_state.nc", "theta0");
+thp_lex2 = ncread("LEX_dx600dz300_no_noise\lex_out_0000.nc", "theta_now") - ...
+    ncread("LEX_dx600dz300_no_noise\lex_reference_state.nc", "theta0");
 
-x_cm1 = ncread("CM1_dx100dz100_no_noise/cm1out_000001.nc", "xh");
-x_lex1 = ncread("LEX_dx100dz100_no_noise/lex_out_0000.nc", "x");
-x_lex2 = ncread("LEX_dx600dz300_no_noise/lex_out_0000.nc", "x");
-z_cm1 = ncread("CM1_dx100dz100_no_noise/cm1out_000001.nc", "zh");
-z_lex1 = ncread("LEX_dx100dz100_no_noise/lex_out_0000.nc", "z");
-z_lex2 = ncread("LEX_dx600dz300_no_noise/lex_out_0000.nc", "z");
+x_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000001.nc", "xh");
+x_lex1 = ncread("LEX_dx100dz100_no_noise\lex_out_0000.nc", "x");
+x_lex2 = ncread("LEX_dx600dz300_no_noise\lex_out_0000.nc", "x");
+z_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000001.nc", "zh");
+z_lex1 = ncread("LEX_dx100dz100_no_noise\lex_out_0000.nc", "z");
+z_lex2 = ncread("LEX_dx600dz300_no_noise\lex_out_0000.nc", "z");
 
 tiledlayout(4, 3, "TileSpacing", "compact")
 nexttile
@@ -60,11 +60,11 @@ grid on
 pbaspect([1,1,1])
 
 %% second row: time = 10.0 min
-thp_cm1 = ncread("CM1_dx100dz100_no_noise/cm1out_000041.nc", "thpert");
-thp_lex1 = ncread("LEX_dx100dz100_no_noise/lex_out_0040.nc", "theta_now") - ...
-    ncread("LEX_dx100dz100_no_noise/lex_out_0040.nc", "theta0_now");
-thp_lex2 = ncread("LEX_dx600dz300_no_noise/lex_out_0040.nc", "theta_now") - ...
-    ncread("LEX_dx600dz300_no_noise/lex_out_0040.nc", "theta0_now");
+thp_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000041.nc", "thpert");
+thp_lex1 = ncread("LEX_dx100dz100_no_noise\lex_out_0040.nc", "theta_now") - ...
+    ncread("LEX_dx100dz100_no_noise\lex_reference_state.nc", "theta0");
+thp_lex2 = ncread("LEX_dx600dz300_no_noise\lex_out_0040.nc", "theta_now") - ...
+    ncread("LEX_dx600dz300_no_noise\lex_reference_state.nc", "theta0");
 
 nexttile
 [X, Y] = meshgrid(x_cm1, z_cm1);
@@ -109,11 +109,11 @@ grid on
 pbaspect([1,1,1])
 
 %% second row: time = 20.0 min
-thp_cm1 = ncread("CM1_dx100dz100_no_noise/cm1out_000081.nc", "thpert");
-thp_lex1 = ncread("LEX_dx100dz100_no_noise/lex_out_0080.nc", "theta_now") - ...
-    ncread("LEX_dx100dz100_no_noise/lex_out_0080.nc", "theta0_now");
-thp_lex2 = ncread("LEX_dx600dz300_no_noise/lex_out_0080.nc", "theta_now") - ...
-    ncread("LEX_dx600dz300_no_noise/lex_out_0080.nc", "theta0_now");
+thp_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000081.nc", "thpert");
+thp_lex1 = ncread("LEX_dx100dz100_no_noise\lex_out_0080.nc", "theta_now") - ...
+    ncread("LEX_dx100dz100_no_noise\lex_reference_state.nc", "theta0");
+thp_lex2 = ncread("LEX_dx600dz300_no_noise\lex_out_0080.nc", "theta_now") - ...
+    ncread("LEX_dx600dz300_no_noise\lex_reference_state.nc", "theta0");
 
 nexttile
 [X, Y] = meshgrid(x_cm1, z_cm1);
@@ -158,11 +158,11 @@ grid on
 pbaspect([1,1,1])
 
 %% second row: time = 30.0 min
-thp_cm1 = ncread("CM1_dx100dz100_no_noise/cm1out_000121.nc", "thpert");
-thp_lex1 = ncread("LEX_dx100dz100_no_noise/lex_out_0120.nc", "theta_now") - ...
-    ncread("LEX_dx100dz100_no_noise/lex_out_0120.nc", "theta0_now");
-thp_lex2 = ncread("LEX_dx600dz300_no_noise/lex_out_0120.nc", "theta_now") - ...
-    ncread("LEX_dx600dz300_no_noise/lex_out_0120.nc", "theta0_now");
+thp_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000121.nc", "thpert");
+thp_lex1 = ncread("LEX_dx100dz100_no_noise\lex_out_0120.nc", "theta_now") - ...
+    ncread("LEX_dx100dz100_no_noise\lex_reference_state.nc", "theta0");
+thp_lex2 = ncread("LEX_dx600dz300_no_noise\lex_out_0120.nc", "theta_now") - ...
+    ncread("LEX_dx600dz300_no_noise\lex_reference_state.nc", "theta0");
 
 nexttile
 [X, Y] = meshgrid(x_cm1, z_cm1);
