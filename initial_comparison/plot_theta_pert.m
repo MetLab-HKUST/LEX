@@ -208,4 +208,4 @@ pbaspect([1,1,1])
 
 cbh = colorbar(h); 
 cbh.Layout.Tile = 'south';
-cbh.Label.String = "/theta' (K)";
+cbh.Label.String = "\theta' (K)";
