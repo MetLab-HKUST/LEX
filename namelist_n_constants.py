@@ -1,9 +1,9 @@
 """ Namelist variables and constants for LEX """
 
 # Time integration
-dt = 4             # one-step integration time step
-sprint_n = 15      # dt*sprint_n is the interval of data saving
-relay_n = 30       # number of sprints, relay_n*sprint_n*dt is the total integration time
+dt = 3             # one-step integration time step
+sprint_n = 5       # dt*sprint_n is the interval of data saving
+relay_n = 120      # number of sprints, relay_n*sprint_n*dt is the total integration time
 asselin_r = 0.25   # r factor in the Asselin filtering
 
 # Grid configuration
@@ -17,8 +17,10 @@ ngx = 3      # number of ghost points on one side of the x-direction
 ngy = 3      # number of ghost points on one side of the y-direction
 ngz = 1      # number of ghost points on one side of the z-direction
 
-# output file name
-fileNameFormat = "experiments/lex_out_%0.4i.nc"
+# output file 
+file_name_format = "experiments/lex_out_%0.4i.nc"
+base_file_name = "experiments/lex_reference_state.nc"
+save_num_levels = 1
 
 # Initial condition choice
 ic_option = 1

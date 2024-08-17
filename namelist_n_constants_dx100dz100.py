@@ -18,11 +18,13 @@ ngy = 3      # number of ghost points on one side of the y-direction
 ngz = 1      # number of ghost points on one side of the z-direction
 
 # output file name
-fileNameFormat = "experiments/lex_out_%0.4i.nc"
+file_name_format = "experiments/lex_out_%0.4i.nc"
+base_file_name = "experiments/lex_reference_state.nc"
+save_num_levels = 1
 
 # Initial condition choice
 ic_option = 1
-rand_opt = True
+rand_opt = False
 
 # Coriolis force
 cor_opt = False
