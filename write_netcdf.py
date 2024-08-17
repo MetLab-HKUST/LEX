@@ -33,7 +33,11 @@ def save2nc(phys_state, sfc_others, grids, sprint_i, model_time):
     itime = nc_file.createVariable("time", np.float32, ("time",))
     itime.long_name = "time (s)"
 
-    (theta_now, theta_next, pip_now, qv_now, qv_next, u_now, u_next, v_now, v_next, w_now, w_next) = phys_state
+    if nl.integrate_opt == 1:
+        (theta_now, u_now, v_now, w_now, pip_now, qv_now) = phys_state    # pip_now is actually the previous step pi'
+    elif nl.integrate_opt == 2:
+        (theta_now, theta_next, pip_now, qv_now, qv_next, u_now, u_next, v_now, v_next, w_now, w_next) = phys_state
+
     (info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = sfc_others
     x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf = grids
 
@@ -80,7 +84,7 @@ def save2nc(phys_state, sfc_others, grids, sprint_i, model_time):
     info_1.long_name = "exit code of the Poisson equation solver"
     info_1[:] = info
 
-    if nl.save_num_levels == 2:
+    if nl.save_num_levels == 2 and nl.integrate_opt != 1:
         theta_2 = nc_file.createVariable("theta_next", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
         theta_2.long_name = "theta for the next time step"
         theta_2[:, :, :, :] = np.reshape(theta_next[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],

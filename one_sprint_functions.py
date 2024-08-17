@@ -14,18 +14,21 @@ import namelist_n_constants as nl
 @partial(jax.jit, static_argnames=['model_opt'])
 def first_step_integration_ssprk3(phys_state, base_state, grids, model_opt):
     """ The first step using RK4 method """
+    int_opt = model_opt[1]
     xi0 = phys_state
-    xi1, _, sfc_etc = one.rk_sub_step(xi0, xi0, base_state, grids, model_opt, nl.dt)
-    _, _, _, _, pip_now, _ = xi1
-    xi2, _, _ = one.rk_sub_step(xi1, xi1, base_state, grids, model_opt, nl.dt)
-    xi2 = tuple(map(lambda x, y: 0.75*x + 0.25*y, xi0, xi2))
-    xi3, _, _ = one.rk_sub_step(xi2, xi2, base_state, grids, model_opt, nl.dt)
-    
-    (theta_next, u_next, v_next, w_next, _, qv_next) = tuple(map(lambda phix, phiy: 1.0/3.0*phix + 2.0/3.0*phiy, xi0, xi3))
+    xi1, _, sfc_others, heating = one.rk_sub_step0(xi0, xi0, base_state, grids, model_opt, nl.dt)
+    if int_opt == 2:
+        _, _, _, _, pip_now, _ = xi1
+        xi2, _ = one.rk_sub_step_other(xi1, xi1, base_state, grids, heating, sfc_others, model_opt, nl.dt)
+        xi2 = tuple(map(lambda x, y: 0.75 * x + 0.25 * y, xi0, xi2))
+        xi3, _ = one.rk_sub_step_other(xi2, xi2, base_state, grids, heating, sfc_others, model_opt, nl.dt)
+        (theta_next, u_next, v_next, w_next, _, qv_next) = tuple(map(lambda x, y: 1.0 / 3.0 * x + 2.0 / 3.0 * y, xi0, xi3))
+    # for SSPRK3, we only want to get surface flux for the initial time
 
-    theta_now, u_now, v_now, w_now, _, qv_now = phys_state
-    phys_state = (theta_now, theta_next, pip_now, qv_now, qv_next, u_now, u_next, v_now, v_next, w_now, w_next)
-    sfc_others = sfc_etc
+    if int_opt == 2:    # leapfrog
+        theta_now, u_now, v_now, w_now, _, qv_now = phys_state
+        phys_state = (theta_now, theta_next, pip_now, qv_now, qv_next, u_now, u_next, v_now, v_next, w_now, w_next)
+    # for SSPRK3, just output the I.C.
 
     return phys_state, sfc_others
 
@@ -34,18 +37,15 @@ def first_step_integration_ssprk3(phys_state, base_state, grids, model_opt):
 def ssprk3_sprint(phys_state, base_state, grids, model_opt):
     """ Integration using SSPRK3 method for sprint_n steps """
     for i in range(nl.sprint_n):
-        theta_prev, theta_now, pip_prev, qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now = phys_state
-        xi0 = (theta_now, u_now, v_now, w_now, pip_prev, qv_now)
-        xi1, _, sfc_etc = one.rk_sub_step(xi0, xi0, base_state, grids, model_opt, nl.dt)
+        xi0 = phys_state
+        xi1, _, sfc_others, heating = one.rk_sub_step0(xi0, xi0, base_state, grids, model_opt, nl.dt)
         _, _, _, _, pip_now, _ = xi1
-        xi2, _, _ = one.rk_sub_step(xi1, xi1, base_state, grids, model_opt, nl.dt)
+        xi2, _ = one.rk_sub_step_other(xi1, xi1, base_state, grids, heating, sfc_others, model_opt, nl.dt)
         xi2 = tuple(map(lambda x, y: 0.75*x + 0.25*y, xi0, xi2))
-        xi3, _, _ = one.rk_sub_step(xi2, xi2, base_state, grids, model_opt, nl.dt)
-        (theta_next, u_next, v_next, w_next, _, qv_next) = tuple(map(lambda phix, phiy: 1.0/3.0*phix + 2.0/3.0*phiy, xi0, xi3))
+        xi3, _ = one.rk_sub_step_other(xi2, xi2, base_state, grids, heating, sfc_others, model_opt, nl.dt)
+        (theta_next, u_next, v_next, w_next, _, qv_next) = tuple(map(lambda x, y: 1.0/3.0*x + 2.0/3.0*y, xi0, xi3))
 
-        phys_state = (theta_now, theta_next, pip_now, qv_now, qv_next, u_now, u_next, v_now, v_next, w_now, w_next)
-
-    sfc_others = sfc_etc
+        phys_state = (theta_next, u_next, v_next, w_next, pip_now, qv_next)
 
     return phys_state, sfc_others
 
@@ -59,7 +59,7 @@ def leapfrog_sprint(phys_state, base_state, grids, model_opt):
     """
     rho0_theta0, rho0, theta0, pi0, qv0, surface_t = base_state
     x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf = grids
-    damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt = model_opt
+    int_opt, damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt = model_opt
 
     for i in range(nl.sprint_n):
         theta_prev, theta_now, pip_prev, qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now = phys_state

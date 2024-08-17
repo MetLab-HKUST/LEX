@@ -13,13 +13,13 @@ import boundary_conditions as bc
 
 
 @partial(jax.jit, static_argnames=['model_opt'])
-def rk_sub_step(phys_state_now, phys_state, base_state, grids, model_opt, dt):
-    """ one sub-step for the RK4 integration, which is used for the first step integration """
+def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
+    """ one sub-step for the SSPRK3 integration """
     theta_now0, u_now0, v_now0, w_now0, pip_prev, qv_now0 = phys_state_now
     theta_now, u_now, v_now, w_now, _, qv_now = phys_state
     rho0_theta0, rho0, theta0, pi0, qv0, surface_t = base_state
     x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf = grids
-    damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt = model_opt
+    int_opt, damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt = model_opt
 
     # update theta equation
     if rad_opt:
@@ -76,8 +76,7 @@ def rk_sub_step(phys_state_now, phys_state, base_state, grids, model_opt, dt):
 
     # update momentum equations
     theta_rho = theta_now * (1.0 + nl.repsm1 * qv_now)  # density potential temperature
-    u_next, v_next, w_next, du_dt, dv_dt, dw_dt = update_momentum_eqn_euler(u_now0, v_now0, w_now0,
-                                                                            u_now, v_now, w_now, pi0, pip_now,
+    u_next, v_next, w_next, du_dt, dv_dt, dw_dt = update_momentum_eqn_euler(u_now0, v_now0, w_now0, pi0, pip_now,
                                                                             theta_rho, adv4u, adv4v, adv4w, fu, fv, b8w,
                                                                             x3d, y3d, z3d, dt)
     # water vapor; cloud variable equations in the future
@@ -101,7 +100,77 @@ def rk_sub_step(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     tends = (d_theta_dt, du_dt, dv_dt, dw_dt, d_qv_dt)
     sfc_etc = (info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
 
-    return phys_state, tends, sfc_etc
+    return phys_state, tends, sfc_etc, heating_now
+
+
+@partial(jax.jit, static_argnames=['model_opt'])
+def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sfc_others, model_opt, dt):
+    """ one sub-step for the SSPRK3 integration
+
+    Physical forcing can be calculated for the first sub-step and then be kept as constant. Heating and surface fluxes
+    are the forcing we have for now.
+    """
+    theta_now0, u_now0, v_now0, w_now0, pip_prev, qv_now0 = phys_state_now
+    theta_now, u_now, v_now, w_now, _, qv_now = phys_state
+    rho0_theta0, rho0, theta0, pi0, qv0, surface_t = base_state
+    x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf = grids
+    int_opt, damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt = model_opt
+
+    heating_now = heating
+    _, _, tau_x, tau_y, sen, evap, _, _, _ = sfc_others
+
+    # update theta equation
+    flow_divergence = adv.get_divergence(rho0, u_now, v_now, w_now, x3d4u, y3d4v, z3d4w)
+
+    theta_next, d_theta_dt = update_theta_euler(rho0, theta_now0, theta_now, u_now, v_now, w_now, flow_divergence, sen / nl.Cp,
+                                                heating_now, x3d4u, y3d4v, z3d4w, dt)
+
+    # update pi' equation
+    theta_p_now = theta_now - theta0
+    buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0, theta_p_now, qv0, qv_now)
+    rtt = pres_eqn.calculate_rtt(rho0_theta0, theta_now, qv_now, buoyancy)
+    adv4u, adv4v, adv4w = prep_momentum_eqn(rho0, u_now, v_now, w_now, flow_divergence, tau_x, tau_y,
+                                            x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
+    if cor_opt:
+        fu, fv = pres_grad.calculate_coriolis_force(u_now, v_now)
+    else:
+        fu = np.zeros((nl.nx, nl.ny + 1, nl.nz))
+        fv = np.zeros((nl.nx + 1, nl.ny, nl.nz))
+
+    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
+                                   fu, fv, buoyancy, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
+    pip_now = padding3_array(pip_now)
+    if pic_opt:  # correct pi'
+        pip_const = correct_pip_constant2(pi0, theta0, qv0, pip_prev, theta_now, qv_now, theta_now, qv_now, pip_now,
+                                          x3d4u, y3d4v, z3d4w)
+        pip_now = pip_now + pip_const
+
+    # update momentum equations
+    theta_rho = theta_now * (1.0 + nl.repsm1 * qv_now)  # density potential temperature
+    u_next, v_next, w_next, du_dt, dv_dt, dw_dt = update_momentum_eqn_euler(u_now0, v_now0, w_now0, pi0, pip_now,
+                                                                            theta_rho, adv4u, adv4v, adv4w, fu, fv, b8w,
+                                                                            x3d, y3d, z3d, dt)
+    # water vapor; cloud variable equations in the future
+    # rho_now = one.get_rho(pi0_now, pip_now, theta_rho, qv_now)    # real microphysics may need it
+    qv_next, d_qv_dt = update_qv_euler(rho0, qv_now0, qv_now, u_now, v_now, w_now, flow_divergence, evap, x3d4u, y3d4v,
+                                       z3d4w, dt)
+
+    # Rayleigh damping
+    if damp_opt:
+        u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
+        u_next = u_next + padding3_array(u_tend * dt)
+        v_next = v_next + padding3_array(v_tend * dt)
+        w_next = w_next + padding3_array(w_tend * dt)
+        du_dt = du_dt + u_tend
+        dv_dt = dv_dt + v_tend
+        dw_dt = dw_dt + w_tend
+        theta_next = theta_next + padding3_array(theta_tend * dt)
+        # Ignore for the warm buble case
+
+    phys_state = (theta_next, u_next, v_next, w_next, pip_now, qv_next)
+    tends = (d_theta_dt, du_dt, dv_dt, dw_dt, d_qv_dt)
+
+    return phys_state, tends
 
 
 def update_theta_euler(rho0_now, theta_now0, theta_now, u_now, v_now, w_now, flow_divergence, sfc_flux, heating, x3d4u, y3d4v,
@@ -189,7 +258,7 @@ def correct_pip_constant2(pi0_now, theta0_now, qv0_now, pip_prev, theta_prev, qv
     return numerator / denominator_b
 
 
-def update_momentum_eqn_euler(u_now0, v_now0, w_now0, u_now, v_now, w_now, pi0_now, pip_now, theta_now, adv4u, adv4v, adv4w, fu, fv, b8w, x3d,
+def update_momentum_eqn_euler(u_now0, v_now0, w_now0, pi0_now, pip_now, theta_now, adv4u, adv4v, adv4w, fu, fv, b8w, x3d,
                               y3d, z3d, dt):
     """ Update momentum to get the next-step values """
     pres_grad4u, pres_grad4v, pres_grad4w = pres_grad.pressure_gradient_force(pi0_now, pip_now, theta_now, x3d, y3d,

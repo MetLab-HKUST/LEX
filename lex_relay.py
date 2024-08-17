@@ -20,7 +20,7 @@ physState, sfcOthers = sp.first_step_integration_ssprk3(physState, baseState, gr
 time1stStep = time.time() - wallTime
 print("First step integration done.")
 
-# save first two time slices
+# save base state and first one/two time slices
 modelTime = 0.0
 wallTime = time.time()
 write.save2nc_base(baseState, grids)
@@ -34,9 +34,9 @@ for i in range(nl.relay_n):
     print("Sprint #%0.4i" % (i+1))
     wallTime = time.time()
     if nl.integrate_opt == 1:
-        physState, sfcOthers = sp.leapfrog_sprint(physState, baseState, grids, modelOpt)
-    elif nl.integrate_opt == 2:
         physState, sfcOthers = sp.ssprk3_sprint(physState, baseState, grids, modelOpt)
+    elif nl.integrate_opt == 2:
+        physState, sfcOthers = sp.leapfrog_sprint(physState, baseState, grids, modelOpt)
 
     if i > 0:
         timeSprints = time.time() - wallTime + timeSprints
