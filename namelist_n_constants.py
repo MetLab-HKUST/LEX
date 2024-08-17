@@ -1,10 +1,11 @@
 """ Namelist variables and constants for LEX """
 
 # Time integration
-dt = 3             # one-step integration time step
-sprint_n = 5       # dt*sprint_n is the interval of data saving
+dt = 15             # one-step integration time step
+sprint_n = 1       # dt*sprint_n is the interval of data saving
 relay_n = 120      # number of sprints, relay_n*sprint_n*dt is the total integration time
 asselin_r = 0.25   # r factor in the Asselin filtering
+integrate_opt = 2  # 1: Leapfrog 2: SSPRK3
 
 # Grid configuration
 dx = 600.0   # x-direction grid spacing in meters

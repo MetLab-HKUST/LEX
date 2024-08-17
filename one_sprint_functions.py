@@ -12,29 +12,40 @@ import namelist_n_constants as nl
 
 
 @partial(jax.jit, static_argnames=['model_opt'])
-def first_step_integration_rk4(phys_state, base_state, grids, model_opt):
+def first_step_integration_ssprk3(phys_state, base_state, grids, model_opt):
     """ The first step using RK4 method """
-    xi1 = phys_state
-    xi2, tend1, sfc_etc = one.rk4_sub_step(xi1, base_state, grids, model_opt, nl.dt/2.0)
-    _, _, _, _, pip_now, _ = xi2
-    xi3, tend2, _ = one.rk4_sub_step(xi2, base_state, grids, model_opt, nl.dt/2.0)
-    xi4, tend3, _ = one.rk4_sub_step(xi3, base_state, grids, model_opt, nl.dt)
-    _, tend4, _, = one.rk4_sub_step(xi4, base_state, grids, model_opt, nl.dt)
-    tends = tuple(map(lambda f1, f2, f3, f4: nl.dt/6.0 * (f1 + 2.0*f2 + 2.0*f3 + f4),
-                      tend1, tend2, tend3, tend4))
-    (d_theta, du, dv, dw, d_qv) = tends
-    (info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n) = sfc_etc
+    xi0 = phys_state
+    xi1, _, sfc_etc = one.rk_sub_step(xi0, xi0, base_state, grids, model_opt, nl.dt)
+    _, _, _, _, pip_now, _ = xi1
+    xi2, _, _ = one.rk_sub_step(xi1, xi1, base_state, grids, model_opt, nl.dt)
+    xi2 = tuple(map(lambda x, y: 0.75*x + 0.25*y, xi0, xi2))
+    xi3, _, _ = one.rk_sub_step(xi2, xi2, base_state, grids, model_opt, nl.dt)
+    
+    (theta_next, u_next, v_next, w_next, _, qv_next) = tuple(map(lambda phix, phiy: 1.0/3.0*phix + 2.0/3.0*phiy, xi0, xi3))
 
     theta_now, u_now, v_now, w_now, _, qv_now = phys_state
-
-    theta_next = theta_now + one.padding3_array(d_theta)
-    u_next = u_now + one.padding3_array(du)
-    v_next = v_now + one.padding3_array(dv)
-    w_next = w_now + one.padding3_array(dw)
-    qv_next = qv_now + one.padding3_array(d_qv)
-
     phys_state = (theta_now, theta_next, pip_now, qv_now, qv_next, u_now, u_next, v_now, v_next, w_now, w_next)
-    sfc_others = (info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
+    sfc_others = sfc_etc
+
+    return phys_state, sfc_others
+
+
+@partial(jax.jit, static_argnames=['model_opt'])
+def ssprk3_sprint(phys_state, base_state, grids, model_opt):
+    """ Integration using SSPRK3 method for sprint_n steps """
+    for i in range(nl.sprint_n):
+        theta_prev, theta_now, pip_prev, qv_prev, qv_now, u_prev, u_now, v_prev, v_now, w_prev, w_now = phys_state
+        xi0 = (theta_now, u_now, v_now, w_now, pip_prev, qv_now)
+        xi1, _, sfc_etc = one.rk_sub_step(xi0, xi0, base_state, grids, model_opt, nl.dt)
+        _, _, _, _, pip_now, _ = xi1
+        xi2, _, _ = one.rk_sub_step(xi1, xi1, base_state, grids, model_opt, nl.dt)
+        xi2 = tuple(map(lambda x, y: 0.75*x + 0.25*y, xi0, xi2))
+        xi3, _, _ = one.rk_sub_step(xi2, xi2, base_state, grids, model_opt, nl.dt)
+        (theta_next, u_next, v_next, w_next, _, qv_next) = tuple(map(lambda phix, phiy: 1.0/3.0*phix + 2.0/3.0*phiy, xi0, xi3))
+
+        phys_state = (theta_now, theta_next, pip_now, qv_now, qv_next, u_now, u_next, v_now, v_next, w_now, w_next)
+
+    sfc_others = sfc_etc
 
     return phys_state, sfc_others
 
