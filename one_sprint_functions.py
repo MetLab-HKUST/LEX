@@ -14,7 +14,7 @@ import namelist_n_constants as nl
 @partial(jax.jit, static_argnames=['model_opt'])
 def first_step_integration_ssprk3(phys_state, base_state, grids, model_opt):
     """ The first step using RK4 method """
-    int_opt = model_opt[1]
+    int_opt = model_opt[0]
     xi0 = phys_state
     xi1, _, sfc_others, heating = one.rk_sub_step0(xi0, xi0, base_state, grids, model_opt, nl.dt)
     if int_opt == 2:
