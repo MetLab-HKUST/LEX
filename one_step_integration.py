@@ -183,30 +183,12 @@ def update_theta_euler(rho0_now, theta_now0, theta_now, u_now, v_now, w_now, flo
     return theta_next3, d_theta_dt
 
 
-def update_theta_leapfrog(theta_prev, rho0_now, theta_now, u_now, v_now, w_now, flow_divergence, sfc_flux, heating,
-                          x3d4u, y3d4v, z3d4w):
-    """ Update theta to get the next-step values """
-    d_theta_dt = compute_theta_tendency(rho0_now, theta_now, u_now, v_now, w_now, flow_divergence, sfc_flux, heating,
-                                        x3d4u, y3d4v, z3d4w)
-    theta_next = theta_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + d_theta_dt * 2.0 * nl.dt
-    theta_next3 = padding3_array(theta_next)
-    return theta_next3
-
-
 def update_qv_euler(rho0_now, qv_now0, qv_now, u_now, v_now, w_now, flow_divergence, sfc_flux, x3d4u, y3d4v, z3d4w, dt):
     """ Update theta to get the next-step values """
     d_qv_dt = compute_qv_tendency(rho0_now, qv_now, u_now, v_now, w_now, flow_divergence, sfc_flux, x3d4u, y3d4v, z3d4w)
     qv_next = qv_now0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + d_qv_dt * dt
     qv_next3 = padding3_array(qv_next)
     return qv_next3, d_qv_dt
-
-
-def update_qv_leapfrog(qv_prev, rho0_now, qv_now, u_now, v_now, w_now, flow_divergence, sfc_flux, x3d4u, y3d4v, z3d4w):
-    """ Update theta to get the next-step values """
-    d_qv_dt = compute_qv_tendency(rho0_now, qv_now, u_now, v_now, w_now, flow_divergence, sfc_flux, x3d4u, y3d4v, z3d4w)
-    qv_next = qv_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + d_qv_dt * 2.0 * nl.dt
-    qv_next3 = padding3_array(qv_next)
-    return qv_next3
 
 
 def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
@@ -274,22 +256,6 @@ def update_momentum_eqn_euler(u_now0, v_now0, w_now0, pi0_now, pip_now, theta_no
     w_next3 = padding3_array(w_next)
     w_next3 = bc.set_w_bc(w_next3)
     return u_next3, v_next3, w_next3, du_dt, dv_dt, dw_dt
-
-
-def update_momentum_eqn_leapfrog(u_prev, v_prev, w_prev, pi0_now, pip_now, theta_now, adv4u, adv4v, adv4w, fu, fv, b8w,
-                                 x3d, y3d, z3d):
-    """ Update momentum to get the next-step values """
-    pres_grad4u, pres_grad4v, pres_grad4w = pres_grad.pressure_gradient_force(pi0_now, pip_now, theta_now, x3d, y3d,
-                                                                              z3d)
-
-    u_next = u_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + (adv4u + pres_grad4u + fv) * nl.dt * 2.0
-    v_next = v_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + (adv4v + pres_grad4v - fu) * nl.dt * 2.0
-    w_next = w_prev[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + (adv4w + pres_grad4w + b8w) * nl.dt * 2.0
-    u_next3 = padding3_array(u_next)
-    v_next3 = padding3_array(v_next)
-    w_next3 = padding3_array(w_next)
-    w_next3 = bc.set_w_bc(w_next3)
-    return u_next3, v_next3, w_next3
 
 
 def asselin_filter(u_prev, v_prev, w_prev, theta_prev, qv_prev,
