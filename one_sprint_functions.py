@@ -8,16 +8,17 @@ import namelist_n_constants as nl
 
 @partial(jax.jit, static_argnames=['model_opt'])
 def first_step_integration_ssprk3(phys_state, base_state, grids, model_opt):
-    """ The first step using RK4 method """
+    """ The first step using SSPRK4 method, mainly needed by the leapfrog scheme """
     int_opt = model_opt[0]
     xi0 = phys_state
-    xi1, _, sfc_others, heating = one.rk_sub_step0(xi0, xi0, base_state, grids, model_opt, nl.dt)
+    xi1, _, sfc_others, heating = one.rk_sub_step0(xi0, xi0, base_state, grids, model_opt, nl.dt/2.0)
     if int_opt == 2:
         _, _, _, _, pip_now, _ = xi1
-        xi2, _ = one.rk_sub_step_other(xi1, xi1, base_state, grids, heating, sfc_others, model_opt, nl.dt)
-        xi2 = tuple(map(lambda x, y: 0.75 * x + 0.25 * y, xi0, xi2))
-        xi3, _ = one.rk_sub_step_other(xi2, xi2, base_state, grids, heating, sfc_others, model_opt, nl.dt)
-        (theta_next, u_next, v_next, w_next, _, qv_next) = tuple(map(lambda x, y: 1.0 / 3.0 * x + 2.0 / 3.0 * y, xi0, xi3))
+        xi2, _ = one.rk_sub_step_other(xi1, xi1, base_state, grids, heating, sfc_others, model_opt, nl.dt/2.0)
+        xi3, _ = one.rk_sub_step_other(xi2, xi2, base_state, grids, heating, sfc_others, model_opt, nl.dt/2.0)
+        xi3 = tuple(map(lambda x, y: 2.0/3.0*x + 1.0/3.0*y, xi0, xi3))
+        xi4, _ = one.rk_sub_step_other(xi3, xi3, base_state, grids, heating, sfc_others, model_opt, nl.dt/2.0)
+        theta_next, u_next, v_next, w_next, _, qv_next = xi4
     # for SSPRK3, we only want to get surface flux for the initial time
 
     if int_opt == 2:    # leapfrog
@@ -30,16 +31,19 @@ def first_step_integration_ssprk3(phys_state, base_state, grids, model_opt):
 
 @partial(jax.jit, static_argnames=['model_opt'])
 def ssprk3_sprint(phys_state, base_state, grids, model_opt):
-    """ Integration using SSPRK3 method for sprint_n steps """
+    """ Integration using SSPRK3 method for sprint_n steps
+
+    Four-stage SSPRK4 based on Durran (2010) Page 56.
+    """
     for i in range(nl.sprint_n):
         xi0 = phys_state
-        xi1, _, sfc_others, heating = one.rk_sub_step0(xi0, xi0, base_state, grids, model_opt, nl.dt)
+        xi1, _, sfc_others, heating = one.rk_sub_step0(xi0, xi0, base_state, grids, model_opt, nl.dt/2.0)
         _, _, _, _, pip_now, _ = xi1
-        xi2, _ = one.rk_sub_step_other(xi1, xi1, base_state, grids, heating, sfc_others, model_opt, nl.dt)
-        xi2 = tuple(map(lambda x, y: 0.75*x + 0.25*y, xi0, xi2))
-        xi3, _ = one.rk_sub_step_other(xi2, xi2, base_state, grids, heating, sfc_others, model_opt, nl.dt)
-        (theta_next, u_next, v_next, w_next, _, qv_next) = tuple(map(lambda x, y: 1.0/3.0*x + 2.0/3.0*y, xi0, xi3))
-
+        xi2, _ = one.rk_sub_step_other(xi1, xi1, base_state, grids, heating, sfc_others, model_opt, nl.dt/2.0)
+        xi3, _ = one.rk_sub_step_other(xi2, xi2, base_state, grids, heating, sfc_others, model_opt, nl.dt/2.0)
+        xi3 = tuple(map(lambda x, y: 2.0/3.0*x + 1.0/3.0*y, xi0, xi3))
+        xi4, _ = one.rk_sub_step_other(xi3, xi3, base_state, grids, heating, sfc_others, model_opt, nl.dt/2.0)
+        theta_next, u_next, v_next, w_next, _, qv_next = xi4
         phys_state = (theta_next, u_next, v_next, w_next, pip_now, qv_next)
 
     return phys_state, sfc_others
