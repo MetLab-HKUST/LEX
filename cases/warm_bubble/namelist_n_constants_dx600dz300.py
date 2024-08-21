@@ -39,6 +39,9 @@ sfc_z_ref = 10.0    # reference height for wind, 10 m
 sfc_z_t_ref = 2.0    # reference height for scalar, 2 m
 Karman = 0.4    # von Karman constant
 
+# Turbulence model
+turb_opt = 0    # 1: Smagorinsky
+
 # Rayleigh damping
 damp_opt = False
 z_damping = 9600.0    # height above which Rayleigh damping is applied

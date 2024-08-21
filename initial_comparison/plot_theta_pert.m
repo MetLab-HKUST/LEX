@@ -3,15 +3,15 @@
 thp_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000001.nc", "thpert");
 thp_lex1 = ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_out_0000.nc", "theta_now") - ...
     ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_reference_state.nc", "theta0");
-thp_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_out_0000.nc", "theta_now") - ...
-    ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_reference_state.nc", "theta0");
+thp_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_out_0000.nc", "theta_now") - ...
+    ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_reference_state.nc", "theta0");
 
 x_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000001.nc", "xh");
 x_lex1 = ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_out_0000.nc", "x");
-x_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_out_0000.nc", "x");
+x_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_out_0000.nc", "x");
 z_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000001.nc", "zh");
 z_lex1 = ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_out_0000.nc", "z");
-z_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_out_0000.nc", "z");
+z_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_out_0000.nc", "z");
 
 tiledlayout(4, 3, "TileSpacing", "compact")
 nexttile
@@ -54,7 +54,7 @@ xticks([-6, -3, 0, 3, 6])
 ylim([0.15, 12])
 xlabel("x (km)")
 ylabel("z (km)")
-title("LEX (\Deltax = 600m)")
+title("LEX (\Deltax = 600m, SMAG)")
 text(-5.7, 0.75, "t = 0.0 min")
 grid on
 pbaspect([1,1,1])
@@ -63,8 +63,8 @@ pbaspect([1,1,1])
 thp_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000041.nc", "thpert");
 thp_lex1 = ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_out_0020.nc", "theta_now") - ...
     ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_reference_state.nc", "theta0");
-thp_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_out_0020.nc", "theta_now") - ...
-    ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_reference_state.nc", "theta0");
+thp_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_out_0020.nc", "theta_now") - ...
+    ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_reference_state.nc", "theta0");
 
 nexttile
 [X, Y] = meshgrid(x_cm1, z_cm1);
@@ -112,8 +112,8 @@ pbaspect([1,1,1])
 thp_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000081.nc", "thpert");
 thp_lex1 = ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_out_0040.nc", "theta_now") - ...
     ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_reference_state.nc", "theta0");
-thp_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_out_0040.nc", "theta_now") - ...
-    ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_reference_state.nc", "theta0");
+thp_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_out_0040.nc", "theta_now") - ...
+    ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_reference_state.nc", "theta0");
 
 nexttile
 [X, Y] = meshgrid(x_cm1, z_cm1);
@@ -161,8 +161,8 @@ pbaspect([1,1,1])
 thp_cm1 = ncread("CM1_dx100dz100_no_noise\cm1out_000121.nc", "thpert");
 thp_lex1 = ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_out_0060.nc", "theta_now") - ...
     ncread("LEX_dx100dz100_no_noise_SSPRK3dt10\lex_reference_state.nc", "theta0");
-thp_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_out_0060.nc", "theta_now") - ...
-    ncread("LEX_dx600dz300_no_noise_SSPRK3dt30\lex_reference_state.nc", "theta0");
+thp_lex2 = ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_out_0060.nc", "theta_now") - ...
+    ncread("LEX_dx600dz300_no_noise_SSPRK3dt30_Smag\lex_reference_state.nc", "theta0");
 
 nexttile
 [X, Y] = meshgrid(x_cm1, z_cm1);

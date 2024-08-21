@@ -126,6 +126,16 @@ def interpolate_scalar2w(scalar):
     return scalar8w
 
 
+def interpolate_scalar2w_0(scalar):
+    """ Interpolate scalar array to w points, including bottom and top levels, but no ghost points. """
+    scalar8w_part = 0.5 * (scalar[:, :, 0:-1] + scalar[:, :, 1:])
+    x_size, y_size, _ = scalar.shape
+    bottom = jnp.zeros((x_size, y_size, 1))
+    top = jnp.zeros((x_size, y_size, 1))
+    scalar8w = jnp.concatenate((bottom, scalar8w_part, top), axis=2)
+    return scalar8w
+
+
 def extrapolate_bottom_top(scalar):
     """ Extrapolate a scalar array to bottom and top w levels
 

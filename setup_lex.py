@@ -59,7 +59,7 @@ def setup_grid_n_ic(ic_option):
     phys_state = (theta, u, v, w, pip, qv)
     base_state = (rho0_theta0, rho0, theta0, pi0, qv0, surface_t)
     grids = (x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf)
-    model_opt = (nl.integrate_opt, nl.damp_opt, nl.rad_opt, nl.cor_opt, nl.sfc_opt, nl.pic_opt)    # model options
+    model_opt = (nl.integrate_opt, nl.damp_opt, nl.rad_opt, nl.cor_opt, nl.sfc_opt, nl.pic_opt, nl.turb_opt)    # model options
 
     return phys_state, base_state, grids, model_opt
 

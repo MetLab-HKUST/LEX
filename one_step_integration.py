@@ -10,7 +10,7 @@ import radiation as rad
 import pressure_equations as pres_eqn
 import pressure_gradient_coriolis as pres_grad
 import boundary_conditions as bc
-
+import turbulence as turb
 
 @partial(jax.jit, static_argnames=['model_opt'])
 def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
@@ -19,7 +19,7 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     theta_now, u_now, v_now, w_now, _, qv_now = phys_state
     rho0_theta0, rho0, theta0, pi0, qv0, surface_t = base_state
     x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf = grids
-    int_opt, damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt = model_opt
+    int_opt, damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt, turb_opt = model_opt
 
     # update theta equation
     if rad_opt:
@@ -84,6 +84,32 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     qv_next, d_qv_dt = update_qv_euler(rho0, qv_now0, qv_now, u_now, v_now, w_now, flow_divergence, evap, x3d4u, y3d4v,
                                        z3d4w, dt)
 
+    # Turbulence model
+    if turb_opt == 1:    # Smagorinsky
+        s11, s22, s33, s12, s13, s23, deform = turb.compute_deformation(rho0, u_now, v_now, w_now, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
+        n2 = turb.compute_nm(theta_now, qv_now, z3d)
+        km, kh = turb.compute_k(deform, n2, x3d4u, y3d4v, z3d4w)
+        sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = turb.compute_smag(
+            rho0, km, kh, s11, s22, s33, s12, s13, s23, theta_now, qv_now, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
+        u_next = u_next + padding3_array(sgs_u * dt)
+        v_next = v_next + padding3_array(sgs_v * dt)
+        w_next = w_next + padding3_array(sgs_w * dt)
+        du_dt = du_dt + sgs_u
+        dv_dt = dv_dt + sgs_v
+        dw_dt = dw_dt + sgs_w
+        theta_next = theta_next + padding3_array(sgs_theta * dt)
+        d_theta_dt = d_theta_dt + sgs_theta 
+        qv_next = qv_next + padding3_array(sgs_qv * dt)
+        d_qv_dt = d_qv_dt + sgs_qv 
+        sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
+    else:
+        sgs_u = np.zeros((nl.nx+1, nl.ny, nl.nz))
+        sgs_v = np.zeros((nl.nx, nl.ny+1, nl.nz))
+        sgs_w = np.zeros((nl.nx, nl.ny, nl.nz+1))
+        sgs_theta = np.zeros((nl.nx, nl.ny, nl.nz))
+        sgs_qv = np.zeros((nl.nx, nl.ny, nl.nz))
+        sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
+        
     # Rayleigh damping
     if damp_opt:
         u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
@@ -94,17 +120,18 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
         dv_dt = dv_dt + v_tend
         dw_dt = dw_dt + w_tend
         theta_next = theta_next + padding3_array(theta_tend * dt)
+        d_theta_dt = d_theta_dt + theta_tend 
         # Ignore for the warm buble case
 
     phys_state = (theta_next, u_next, v_next, w_next, pip_now, qv_next)
     tends = (d_theta_dt, du_dt, dv_dt, dw_dt, d_qv_dt)
     sfc_etc = (info, pip_const, tau_x, tau_y, sen, evap, t_ref, q_ref, u10n)
 
-    return phys_state, tends, sfc_etc, heating_now
+    return phys_state, tends, sfc_etc, heating_now, sgs_tend
 
 
 @partial(jax.jit, static_argnames=['model_opt'])
-def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sfc_others, model_opt, dt):
+def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sfc_others, sgs_tend, model_opt, dt):
     """ one sub-step for the SSPRK3 integration
 
     Physical forcing can be calculated for the first sub-step and then be kept as constant. Heating and surface fluxes
@@ -114,7 +141,7 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
     theta_now, u_now, v_now, w_now, _, qv_now = phys_state
     rho0_theta0, rho0, theta0, pi0, qv0, surface_t = base_state
     x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf = grids
-    int_opt, damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt = model_opt
+    int_opt, damp_opt, rad_opt, cor_opt, sfc_opt, pic_opt, turb_opt = model_opt
 
     heating_now = heating
     _, _, tau_x, tau_y, sen, evap, _, _, _ = sfc_others
@@ -155,6 +182,20 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
     qv_next, d_qv_dt = update_qv_euler(rho0, qv_now0, qv_now, u_now, v_now, w_now, flow_divergence, evap, x3d4u, y3d4v,
                                        z3d4w, dt)
 
+    # Turbulence model
+    if turb_opt == 1:    # Smagorinsky
+        sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = sgs_tend
+        u_next = u_next + padding3_array(sgs_u * dt)
+        v_next = v_next + padding3_array(sgs_v * dt)
+        w_next = w_next + padding3_array(sgs_w * dt)
+        du_dt = du_dt + sgs_u
+        dv_dt = dv_dt + sgs_v
+        dw_dt = dw_dt + sgs_w
+        theta_next = theta_next + padding3_array(sgs_theta * dt)
+        d_theta_dt = d_theta_dt + sgs_theta 
+        qv_next = qv_next + padding3_array(sgs_qv * dt)
+        d_qv_dt = d_qv_dt + sgs_qv 
+    
     # Rayleigh damping
     if damp_opt:
         u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
