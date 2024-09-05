@@ -8,7 +8,7 @@ import namelist_n_constants as nl
 
 @partial(jax.jit, static_argnames=['model_opt'])
 def first_step_integration_ssprk3(phys_state, base_state, grids, model_opt):
-    """ The first step using SSPRK4 method, mainly needed by the leapfrog scheme """
+    """ The first step using SSPRK3 method, mainly needed by the leapfrog scheme """
     int_opt = model_opt[0]
     xi0 = phys_state
     xi1, _, sfc_others, heating, sgs_tend = one.rk_sub_step0(xi0, xi0, base_state, grids, model_opt, nl.dt/2.0)
@@ -33,7 +33,7 @@ def first_step_integration_ssprk3(phys_state, base_state, grids, model_opt):
 def ssprk3_sprint(phys_state, base_state, grids, model_opt):
     """ Integration using SSPRK3 method for sprint_n steps
 
-    Four-stage SSPRK4 based on Durran (2010) Page 56.
+    Four-stage SSPRK3 based on Durran (2010) Page 56.
     """
     for i in range(nl.sprint_n):
         xi0 = phys_state
