@@ -48,7 +48,7 @@ def laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, pi):
     return nl.Cp * (pi_xx + pi_yy + pi_zz)
 
 
-def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, sgs_v, sgs_w, fu, fv, buoyancy,
+def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
                              x3d, x3d4u, y3d, y3d4v, z3d4w):
     """ Compute the right hand side of the pressure equation """
     rhs_adv = get_divergence(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
@@ -56,10 +56,6 @@ def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, 
                           y3d4v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                           z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
     # Assuming that rho0_theta0 has all the ghost points, but advection tendencies have no ghost points
-    rhs_sgs = get_divergence(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                          sgs_u, sgs_v, sgs_w, x3d4u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                          y3d4v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
-                          z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
 
     rhs_cor = get_2d_divergence(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                   fv, -fu, x3d4u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
@@ -75,8 +71,8 @@ def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, 
     rhs_pres = - horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v,
                                                     rtt, pi0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
 
-    rhs = rhs_adv + rhs_sgs + rhs_cor + rhs_buoy + rhs_pres
-    return rhs, rhs_adv, rhs_sgs, rhs_cor, rhs_buoy, rhs_pres
+    rhs = rhs_adv + rhs_cor + rhs_buoy + rhs_pres
+    return rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres
 
 
 def horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v, rtt, pi):

@@ -1,6 +1,7 @@
 """ One sprint means many steps that do not need to be interrupted and after which we save the data to an output file """
-import jax
+
 from functools import partial
+import jax
 import one_step_integration as one
 import namelist_n_constants as nl
 

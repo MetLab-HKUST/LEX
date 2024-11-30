@@ -12,7 +12,6 @@ import pressure_gradient_coriolis as pres_grad
 import boundary_conditions as bc
 import turbulence as turb
 
-
 @partial(jax.jit, static_argnames=['model_opt'])
 def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     """ one sub-step for the SSPRK3 integration """
@@ -53,23 +52,6 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     theta_next, d_theta_dt = update_theta_euler(rho0, theta_now0, theta_now, u_now, v_now, w_now, flow_divergence, sen / nl.Cp,
                                                 heating_now, x3d4u, y3d4v, z3d4w, dt)
 
-    # Turbulence model
-    if turb_opt == 1:  # Smagorinsky
-        s11, s22, s33, s12, s13, s23, deform = turb.compute_deformation(rho0, u_now, v_now, w_now, x3d, y3d, z3d, x3d4u,
-                                                                        y3d4v, z3d4w)
-        n2 = turb.compute_nm(theta_now, qv_now, z3d)
-        km, kh = turb.compute_k(deform, n2, x3d4u, y3d4v, z3d4w)
-        sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = turb.compute_smag(
-            rho0, km, kh, s11, s22, s33, s12, s13, s23, theta_now, qv_now, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
-        sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
-    else:
-        sgs_u = np.zeros((nl.nx + 1, nl.ny, nl.nz))
-        sgs_v = np.zeros((nl.nx, nl.ny + 1, nl.nz))
-        sgs_w = np.zeros((nl.nx, nl.ny, nl.nz + 1))
-        sgs_theta = np.zeros((nl.nx, nl.ny, nl.nz))
-        sgs_qv = np.zeros((nl.nx, nl.ny, nl.nz))
-        sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
-
     # update pi' equation
     theta_p_now = theta_now - theta0
     buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0, theta_p_now, qv0, qv_now)
@@ -82,7 +64,7 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
         fu = np.zeros((nl.nx, nl.ny + 1, nl.nz))
         fv = np.zeros((nl.nx + 1, nl.ny, nl.nz))
 
-    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, sgs_v, sgs_w,
+    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
                                    fu, fv, buoyancy, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
     pip_now = padding3_array(pip_now)
     if pic_opt:  # correct pi'
@@ -102,8 +84,13 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     qv_next, d_qv_dt = update_qv_euler(rho0, qv_now0, qv_now, u_now, v_now, w_now, flow_divergence, evap, x3d4u, y3d4v,
                                        z3d4w, dt)
 
-    # Turbulence model updates
+    # Turbulence model
     if turb_opt == 1:    # Smagorinsky
+        s11, s22, s33, s12, s13, s23, deform = turb.compute_deformation(rho0, u_now, v_now, w_now, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
+        n2 = turb.compute_nm(theta_now, qv_now, z3d)
+        km, kh = turb.compute_k(deform, n2, x3d4u, y3d4v, z3d4w)
+        sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = turb.compute_smag(
+            rho0, km, kh, s11, s22, s33, s12, s13, s23, theta_now, qv_now, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
         u_next = u_next + padding3_array(sgs_u * dt)
         v_next = v_next + padding3_array(sgs_v * dt)
         w_next = w_next + padding3_array(sgs_w * dt)
@@ -111,10 +98,18 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
         dv_dt = dv_dt + sgs_v
         dw_dt = dw_dt + sgs_w
         theta_next = theta_next + padding3_array(sgs_theta * dt)
-        d_theta_dt = d_theta_dt + sgs_theta
+        d_theta_dt = d_theta_dt + sgs_theta 
         qv_next = qv_next + padding3_array(sgs_qv * dt)
-        d_qv_dt = d_qv_dt + sgs_qv
-
+        d_qv_dt = d_qv_dt + sgs_qv 
+        sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
+    else:
+        sgs_u = np.zeros((nl.nx+1, nl.ny, nl.nz))
+        sgs_v = np.zeros((nl.nx, nl.ny+1, nl.nz))
+        sgs_w = np.zeros((nl.nx, nl.ny, nl.nz+1))
+        sgs_theta = np.zeros((nl.nx, nl.ny, nl.nz))
+        sgs_qv = np.zeros((nl.nx, nl.ny, nl.nz))
+        sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
+        
     # Rayleigh damping
     if damp_opt:
         u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
@@ -169,9 +164,7 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
         fu = np.zeros((nl.nx, nl.ny + 1, nl.nz))
         fv = np.zeros((nl.nx + 1, nl.ny, nl.nz))
 
-    sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = sgs_tend
-
-    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, sgs_v, sgs_w,
+    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u_now, v_now, w_now, adv4u, adv4v, adv4w,
                                    fu, fv, buoyancy, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
     pip_now = padding3_array(pip_now)
     if pic_opt:  # correct pi'
@@ -191,6 +184,7 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
 
     # Turbulence model
     if turb_opt == 1:    # Smagorinsky
+        sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = sgs_tend
         u_next = u_next + padding3_array(sgs_u * dt)
         v_next = v_next + padding3_array(sgs_v * dt)
         w_next = w_next + padding3_array(sgs_w * dt)
@@ -238,11 +232,11 @@ def update_qv_euler(rho0_now, qv_now0, qv_now, u_now, v_now, w_now, flow_diverge
     return qv_next3, d_qv_dt
 
 
-def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, sgs_v, sgs_w, fu, fv, buoyancy,
+def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, u, v, w, adv4u, adv4v, adv4w, fu, fv, buoyancy,
                    x3d, x3d4u, y3d, y3d4v, z3d, z3d4w):
     """ Solve the Poisson-like equation for pressure perturbations, pi\' (pip) """
-    rhs, rhs_adv, rhs_sgs, rhs_cor, rhs_buoy, rhs_pres = pres_eqn.rhs_of_pressure_equation(rho0_theta0, pi0, rtt, adv4u,
-                                                                                  adv4v, adv4w, sgs_u, sgs_v, sgs_w, fu, fv, buoyancy,
+    rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres = pres_eqn.rhs_of_pressure_equation(rho0_theta0, pi0, rtt, u, v, w, adv4u,
+                                                                                  adv4v, adv4w, fu, fv, buoyancy,
                                                                                   x3d, x3d4u, y3d, y3d4v, z3d4w)
 
     tol = 1.0e-4  # the tolerance level needs to be tested and tuned.

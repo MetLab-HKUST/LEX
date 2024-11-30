@@ -40,10 +40,10 @@ sfc_z_t_ref = 2.0    # reference height for scalar, 2 m
 Karman = 0.4    # von Karman constant
 
 # Turbulence model
-turb_opt = 1    # 1: Smagorinsky
+turb_opt = 0    # 1: Smagorinsky
 
 # Rayleigh damping
-damp_opt = True
+damp_opt = False
 z_damping = 9600.0    # height above which Rayleigh damping is applied
 rd_alpha = 1.0/300.0  # Inverse e-folding time for upper - level Rayleigh damping layer
 
