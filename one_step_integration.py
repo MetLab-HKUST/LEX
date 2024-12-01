@@ -42,13 +42,13 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
         tau_x, tau_y, sen, evap, t_ref, q_ref, u10n = bc.atm_ocn_flux(z_bottom, u_bottom, v_bottom, theta_bottom,
                                                                       q_bottom, rho_bottom, surface_t)
     else:
-        tau_x = np.zeros((nl.nx, nl.ny))
-        tau_y = np.zeros((nl.nx, nl.ny))
-        sen = np.zeros((nl.nx, nl.ny))
-        evap = np.zeros((nl.nx, nl.ny))
-        t_ref = np.zeros((nl.nx, nl.ny))
-        q_ref = np.zeros((nl.nx, nl.ny))
-        u10n = np.zeros((nl.nx, nl.ny))
+        tau_x = jnp.zeros((nl.nx, nl.ny))
+        tau_y = jnp.zeros((nl.nx, nl.ny))
+        sen = jnp.zeros((nl.nx, nl.ny))
+        evap = jnp.zeros((nl.nx, nl.ny))
+        t_ref = jnp.zeros((nl.nx, nl.ny))
+        q_ref = jnp.zeros((nl.nx, nl.ny))
+        u10n = jnp.zeros((nl.nx, nl.ny))
 
     theta_next, d_theta_dt = update_theta_euler(rho0, theta_now0, theta_now, u_now, v_now, w_now, flow_divergence, sen / nl.Cp,
                                                 heating_now, x3d4u, y3d4v, z3d4w, dt)
@@ -63,11 +63,11 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
             rho0, km, kh, s11, s22, s33, s12, s13, s23, theta_now, qv_now, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
         sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
     else:
-        sgs_u = np.zeros((nl.nx + 1, nl.ny, nl.nz))
-        sgs_v = np.zeros((nl.nx, nl.ny + 1, nl.nz))
-        sgs_w = np.zeros((nl.nx, nl.ny, nl.nz + 1))
-        sgs_theta = np.zeros((nl.nx, nl.ny, nl.nz))
-        sgs_qv = np.zeros((nl.nx, nl.ny, nl.nz))
+        sgs_u = jnp.zeros((nl.nx + 1, nl.ny, nl.nz))
+        sgs_v = jnp.zeros((nl.nx, nl.ny + 1, nl.nz))
+        sgs_w = jnp.zeros((nl.nx, nl.ny, nl.nz + 1))
+        sgs_theta = jnp.zeros((nl.nx, nl.ny, nl.nz))
+        sgs_qv = jnp.zeros((nl.nx, nl.ny, nl.nz))
         sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
 
     # update pi' equation
@@ -79,8 +79,8 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     if cor_opt:
         fu, fv = pres_grad.calculate_coriolis_force(u_now, v_now)
     else:
-        fu = np.zeros((nl.nx, nl.ny + 1, nl.nz))
-        fv = np.zeros((nl.nx + 1, nl.ny, nl.nz))
+        fu = jnp.zeros((nl.nx, nl.ny + 1, nl.nz))
+        fv = jnp.zeros((nl.nx + 1, nl.ny, nl.nz))
 
     pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, sgs_v, sgs_w,
                                    fu, fv, buoyancy, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
