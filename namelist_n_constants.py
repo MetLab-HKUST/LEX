@@ -1,9 +1,9 @@
 """ Namelist variables and constants for LEX """
 
 # Time integration
-dt = 10             # one-step integration time step
-sprint_n = 3       # dt*sprint_n is the interval of data saving
-relay_n = 60       # number of sprints, relay_n*sprint_n*dt is the total integration time
+dt = 5             # one-step integration time step
+sprint_n = 1       # dt*sprint_n is the interval of data saving
+relay_n = 360      # number of sprints, relay_n*sprint_n*dt is the total integration time
 asselin_r = 0.25   # r factor in the Asselin filtering
 integrate_opt = 1  # 1: SSPRK3, 2: Leapfrog
 
@@ -11,9 +11,9 @@ integrate_opt = 1  # 1: SSPRK3, 2: Leapfrog
 dx = 100.0   # x-direction grid spacing in meters
 dy = 100.0   # y-direction grid spacing in meters
 dz = 100.0   # z-direction grid spacing in meters
-nx = 240      # number of grid cells in x-direction
-ny = 240      # number of grid cells in y-direction
-nz = 120      # number of grid cells in z-direction
+nx = 240     # number of grid cells in x-direction
+ny = 240     # number of grid cells in y-direction
+nz = 120     # number of grid cells in z-direction
 ngx = 3      # number of ghost points on one side of the x-direction
 ngy = 3      # number of ghost points on one side of the y-direction
 ngz = 1      # number of ghost points on one side of the z-direction
@@ -43,7 +43,7 @@ Karman = 0.4    # von Karman constant
 turb_opt = 0    # 1: Smagorinsky
 
 # Rayleigh damping
-damp_opt = False
+damp_opt = True
 z_damping = 9600.0    # height above which Rayleigh damping is applied
 rd_alpha = 1.0/300.0  # Inverse e-folding time for upper - level Rayleigh damping layer
 
