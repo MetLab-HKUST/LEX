@@ -82,7 +82,7 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, qv0, pip, theta, qv, u, v, 
     zr = 2000.0
     rh = 0.1
     r = jnp.sqrt(((x3d - xc) / xr)**2 + ((y3d - yc) / yr)**2 + ((z3d - zc) / zr)**2)    # bubble
-    theta_p = 1.0 * (jnp.cos(r * np.pi/2.0))**2
+    theta_p = 2.0 * (jnp.cos(r * np.pi/2.0))**2
     theta_p = jnp.where(r > 1.0, 0.0, theta_p)
     if nl.rand_opt:
         # add random perturbations to theta
