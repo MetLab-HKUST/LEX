@@ -104,8 +104,8 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
 
     # Turbulence model updates
     if turb_opt == 1:    # Smagorinsky
-        u_next = u_next + padding3_array(sgs_u * dt)
-        v_next = v_next + padding3_array(sgs_v * dt)
+        u_next = u_next + padding3u_array(sgs_u * dt)
+        v_next = v_next + padding3v_array(sgs_v * dt)
         w_next = w_next + padding3_array(sgs_w * dt)
         du_dt = du_dt + sgs_u
         dv_dt = dv_dt + sgs_v
@@ -118,8 +118,8 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     # Rayleigh damping
     if damp_opt:
         u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
-        u_next = u_next + padding3_array(u_tend * dt)
-        v_next = v_next + padding3_array(v_tend * dt)
+        u_next = u_next + padding3u_array(u_tend * dt)
+        v_next = v_next + padding3v_array(v_tend * dt)
         w_next = w_next + padding3_array(w_tend * dt)
         du_dt = du_dt + u_tend
         dv_dt = dv_dt + v_tend
@@ -191,8 +191,8 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
 
     # Turbulence model
     if turb_opt == 1:    # Smagorinsky
-        u_next = u_next + padding3_array(sgs_u * dt)
-        v_next = v_next + padding3_array(sgs_v * dt)
+        u_next = u_next + padding3u_array(sgs_u * dt)
+        v_next = v_next + padding3v_array(sgs_v * dt)
         w_next = w_next + padding3_array(sgs_w * dt)
         du_dt = du_dt + sgs_u
         dv_dt = dv_dt + sgs_v
@@ -205,8 +205,8 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
     # Rayleigh damping
     if damp_opt:
         u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_now, v_now, w_now, theta_now)
-        u_next = u_next + padding3_array(u_tend * dt)
-        v_next = v_next + padding3_array(v_tend * dt)
+        u_next = u_next + padding3u_array(u_tend * dt)
+        v_next = v_next + padding3v_array(v_tend * dt)
         w_next = w_next + padding3_array(w_tend * dt)
         du_dt = du_dt + u_tend
         dv_dt = dv_dt + v_tend
@@ -298,8 +298,8 @@ def update_momentum_eqn_euler(u_now0, v_now0, w_now0, pi0_now, pip_now, theta_no
     v_next = v_now0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + dv_dt * dt
     dw_dt = adv4w + pres_grad4w + b8w
     w_next = w_now0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + dw_dt * dt
-    u_next3 = padding3_array(u_next)
-    v_next3 = padding3_array(v_next)
+    u_next3 = padding3u_array(u_next)
+    v_next3 = padding3v_array(v_next)
     w_next3 = padding3_array(w_next)
     w_next3 = bc.set_w_bc(w_next3)
     return u_next3, v_next3, w_next3, du_dt, dv_dt, dw_dt
@@ -378,6 +378,32 @@ def padding3_array(arr):
     """ Padding an array with three ghost points on each side """
     arr_x = jnp.concatenate((arr[-nl.ngx:, :, :], arr, arr[0:nl.ngx, :, :]), axis=0)
     arr_xy = jnp.concatenate((arr_x[:, -nl.ngx:, :], arr_x, arr_x[:, 0:nl.ngx, :]), axis=1)
+    x_size, y_size, _ = jnp.shape(arr_xy)
+    bottom = jnp.reshape(arr_xy[:, :, 0], (x_size, y_size, 1))
+    top = jnp.reshape(arr_xy[:, :, -1], (x_size, y_size, 1))
+    arr_xyz = jnp.concatenate((bottom, arr_xy, top), axis=2)
+    # The ghost points at the bottom and top are more like placeholders, without practical use for now.
+    return arr_xyz
+
+
+def padding3u_array(arr):
+    """ Padding an array at U point with three ghost points on each side """
+    arr0 = arr.at[-(nl.ngx+1), :, :].set(arr[nl.ngx, :, :])  # make sure b.c. is same U
+    arr_x = jnp.concatenate((arr0[-(nl.ngx+1):-1, :, :], arr0, arr0[1:nl.ngx+1, :, :]), axis=0)
+    arr_xy = jnp.concatenate((arr_x[:, -nl.ngy:, :], arr_x, arr_x[:, 0:nl.ngy, :]), axis=1)
+    x_size, y_size, _ = jnp.shape(arr_xy)
+    bottom = jnp.reshape(arr_xy[:, :, 0], (x_size, y_size, 1))
+    top = jnp.reshape(arr_xy[:, :, -1], (x_size, y_size, 1))
+    arr_xyz = jnp.concatenate((bottom, arr_xy, top), axis=2)
+    # The ghost points at the bottom and top are more like placeholders, without practical use for now.
+    return arr_xyz
+
+
+def padding3v_array(arr):
+    """ Padding an array at V point with three ghost points on each side """
+    arr0 = arr.at[:, -(nl.ngy+1), :].set(arr[:, nl.ngy, :])  # make sure b.c is same V
+    arr_x = jnp.concatenate((arr0[-nl.ngx:, :, :], arr0, arr0[0:nl.ngx, :, :]), axis=0)
+    arr_xy = jnp.concatenate((arr_x[:, -(nl.ngy+1):-1, :], arr_x, arr_x[:, 1:nl.ngy+1, :]), axis=1)
     x_size, y_size, _ = jnp.shape(arr_xy)
     bottom = jnp.reshape(arr_xy[:, :, 0], (x_size, y_size, 1))
     top = jnp.reshape(arr_xy[:, :, -1], (x_size, y_size, 1))
