@@ -1,15 +1,16 @@
 """ One relay contains many sprints and is typically a complete simulation """
 
 import jax
-# jax.config.update("jax_enable_x64", True)  # use double precision if necessary
+jax.config.update("jax_enable_x64", True)  # use double precision if necessary
 import os
-# os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"]=".95"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"]=".9"
 os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import numpy as np
 import namelist_n_constants as nl
 import setup_lex as setl
 import one_sprint_functions as sp
 import write_netcdf as write
+import write_zarr
 import time
 
 
@@ -29,7 +30,10 @@ print("First step integration done.")
 modelTime = 0.0
 wallTime = time.time()
 write.save2nc_base(baseState, grids)
-write.save2nc(physState, sfcOthers, grids, 0, modelTime)
+if nl.output_format == 1:
+    write.save2nc(physState, sfcOthers, grids, 0, modelTime)
+elif nl.output_format == 2:
+    write_zarr.save2zarr(physState, sfcOthers, 0, modelTime)
 timeWrite = time.time() - wallTime
 
 # do sprints
@@ -50,7 +54,10 @@ for i in range(nl.relay_n):
 
     wallTime = time.time()
     modelTime = np.round((i+1) * nl.sprint_n * nl.dt, decimals=6)
-    write.save2nc(physState, sfcOthers, grids, (i+1), modelTime)
+    if nl.output_format == 1:
+        write.save2nc(physState, sfcOthers, grids, (i+1), modelTime)
+    elif nl.output_format == 2:
+        write_zarr.save2zarr(physState, sfcOthers, (i+1), modelTime)
     timeWrite = time.time() - wallTime + timeWrite
 
 endTime = time.time()

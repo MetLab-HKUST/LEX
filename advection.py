@@ -2,7 +2,6 @@
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import namelist_n_constants as nl
 
 
@@ -11,7 +10,7 @@ def advection_scalar(rho0, scalar, u, v, w, weps, flow_divergence, scalar_sfc_fl
 
     3rd-order WENO is used to compute the vertical flux, and 5th-order WENO is used to compute the horizontal fluxes.
     """
-    flux_z = vertical_flux_scalar(weps, rho0, w, scalar)
+    flux_z = vertical_flux_scalar2(weps, rho0, w, scalar)
     flux_z = flux_z.at[:, :, 0].set(scalar_sfc_flux)  # set lower boundary condition
 
     flux_x, flux_y = horizontal_flux_scalar(weps, rho0, u, v, scalar)
@@ -39,7 +38,7 @@ def advection_u(rho0, u, v, w, weps, flow_divergence, u_sfc_flux, x3d, y3d4v, z3
 
     3rd-order WENO is used to compute the vertical flux, and 5th-order WENO is used to compute the horizontal fluxes.
     """
-    flux_z = vertical_flux_u(weps, rho0, w, u)
+    flux_z = vertical_flux_u2(weps, rho0, w, u)
     _, flx_size_y = jnp.shape(u_sfc_flux)
     tau_x_west = jnp.reshape(u_sfc_flux[-1, :], (1, flx_size_y))
     tau_x_east = jnp.reshape(u_sfc_flux[0, :], (1, flx_size_y))
@@ -79,7 +78,7 @@ def advection_v(rho0, u, v, w, weps, flow_divergence, v_sfc_flux, x3d4u, y3d, z3
 
     3rd-order WENO is used to compute the vertical flux, and 5th-order WENO is used to compute the horizontal fluxes.
     """
-    flux_z = vertical_flux_v(weps, rho0, w, v)
+    flux_z = vertical_flux_v2(weps, rho0, w, v)
     flx_size_x, _ = jnp.shape(v_sfc_flux)
     tau_y_south = jnp.reshape(v_sfc_flux[:, -1], (flx_size_x, 1))
     tau_y_north = jnp.reshape(v_sfc_flux[:, 0], (flx_size_x, 1))
@@ -119,7 +118,7 @@ def advection_w(rho0, u, v, w, weps, flow_divergence, x3d4u, y3d4v, z3d):
 
     3rd-order WENO is used to compute the vertical flux, and 5th-order WENO is used to compute the horizontal fluxes.
     """
-    flux_z = vertical_flux_w(weps, rho0, w)
+    flux_z = vertical_flux_w2(weps, rho0, w)
     flux_x, flux_y = horizontal_flux_w(weps, rho0, u, v, w)
 
     w_convergence = -((flux_x[1:, :, :] - flux_x[0:-1, :, :]) / (0.5 * (
@@ -208,8 +207,12 @@ def vertical_flux_scalar(weps, rho0, w, scalar):
     # If w >= 0
     b1up = (scalar[:, :, 0:-3] - scalar[:, :, 1:-2]) ** 2
     b2up = (scalar[:, :, 1:-2] - scalar[:, :, 2:-1]) ** 2
-    w1up = (1.0 / 3.0) / (weps + b1up) ** 2
-    w2up = (2.0 / 3.0) / (weps + b2up) ** 2
+    # # Original WENO
+    # w1up = (1.0 / 3.0) / (weps + b1up) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up) ** 2
+    # Improved smoothness indicators (Borges et al., 2008, JCP)
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b2up)/(b1up+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b2up)/(b2up+weps))**2)
     weno3_upward = (w1up * ((-1.0 / 2.0) * scalar[:, :, 0:-3] + (3.0 / 2.0) * scalar[:, :, 1:-2]) +
                     w2up * ((1.0 / 2.0) * scalar[:, :, 1:-2] + (1.0 / 2.0) * scalar[:, :, 2:-1])
                     ) / (w1up + w2up)
@@ -218,8 +221,12 @@ def vertical_flux_scalar(weps, rho0, w, scalar):
     # If w < 0
     b1dn = (scalar[:, :, 3:] - scalar[:, :, 2:-1]) ** 2
     b2dn = (scalar[:, :, 2:-1] - scalar[:, :, 1:-2]) ** 2
-    w1dn = (1.0 / 3.0) / (weps + b1dn) ** 2
-    w2dn = (2.0 / 3.0) / (weps + b2dn) ** 2
+    # # Original WENO
+    # w1dn = (1.0 / 3.0) / (weps + b1dn) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn) ** 2
+    # Improved smoothness indicators
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b2dn)/(b1dn+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b2dn)/(b2dn+weps))**2)
     weno3_downward = (w1dn * ((-1.0 / 2.0) * scalar[:, :, 3:] + (3.0 / 2.0) * scalar[:, :, 2:-1]) +
                       w2dn * ((1.0 / 2.0) * scalar[:, :, 2:-1] + (1.0 / 2.0) * scalar[:, :, 1:-2])
                       ) / (w1dn + w2dn)
@@ -236,6 +243,120 @@ def vertical_flux_scalar(weps, rho0, w, scalar):
     return vertical_flux
 
 
+def vertical_flux_scalar2(weps, rho0, w, scalar):
+    """ Vertical scalar flux using 5th-order WENO
+
+    Original WENO5 from Jiang adn Shu, 1996, JCP
+    """
+    # If w >= 0, upward
+    b1up = ((13.0 / 12.0) * (scalar[:,:,0:-5] - 2.0*scalar[:,:,1:-4] + scalar[:,:,2:-3]) ** 2
+           + 0.25 * (scalar[:,:,0:-5] - 4.0*scalar[:,:,1:-4] + 3.0*scalar[:,:,2:-3]) ** 2)
+    b2up = ((13.0 / 12.0) * (scalar[:,:,1:-4] - 2.0*scalar[:,:,2:-3] + scalar[:,:,3:-2]) ** 2
+           + 0.25 * (scalar[:,:,1:-4] - scalar[:,:,3:-2]) ** 2)
+    b3up = ((13.0 / 12.0) * (scalar[:,:,2:-3] - 2.0*scalar[:,:,3:-2] + scalar[:,:,4:-1]) ** 2
+           + 0.25 * (3.0 * scalar[:,:,2:-3] - 4.0 * scalar[:,:,3:-2] + scalar[:,:,4:-1]) ** 2)
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1up = 0.1 / (weps + b1up) ** 2
+    # w2up = 0.6 / (weps + b2up) ** 2
+    # w3up = 0.3 / (weps + b3up) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)
+    w1up = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b1up+weps))**2)       
+    w2up = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b2up+weps))**2)
+    w3up = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b3up+weps))**2)
+    weno5_upward = ((w1up * (
+            (2.0/6.0) * scalar[:,:,0:-5] + (-7.0/6.0)*scalar[:,:,1:-4] + (11.0/6.0) * scalar[:,:,2:-3]) +
+                w2up * ((-1.0/6.0) * scalar[:,:,1:-4] + (5.0/6.0) * scalar[:,:,2:-3] + (2.0/6.0) * scalar[:,:,3:-2]) +
+                w3up * ((2.0/6.0) * scalar[:,:,2:-3] + (5.0/6.0) * scalar[:,:,3:-2] + (-1.0/6.0) * scalar[:,:,4:-1])) /
+               (w1up + w2up + w3up))
+    # use WENO3 and centered difference for near-boundary points
+    b1up_lower = (scalar[:, :, 1:2] - scalar[:, :, 2:3]) ** 2
+    b2up_lower = (scalar[:, :, 2:3] - scalar[:, :, 3:4]) ** 2
+    # # Original WENO
+    # w1up = (1.0 / 3.0) / (weps + b1up_lower) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up_lower) ** 2
+    # Improved smoothness indicators (Borges et al., 2008, JCP)
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_lower-b2up_lower)/(b1up_lower+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_lower-b2up_lower)/(b2up_lower+weps))**2)
+    weno3_upward = (w1up * ((-1.0 / 2.0) * scalar[:, :, 1:2] + (3.0 / 2.0) * scalar[:, :, 2:3]) +
+                    w2up * ((1.0 / 2.0) * scalar[:, :, 2:3] + (1.0 / 2.0) * scalar[:, :, 3:4])
+                    ) / (w1up + w2up)
+    weno5_upward = weno5_upward.at[:, :, 0:1].set(weno3_upward)
+    scalar_l1 = 0.5 * (scalar[:, :, 1:2] + scalar[:, :, 2:3])
+    b1up_upper = (scalar[:, :, -4:-3] - scalar[:, :, -3:-2]) ** 2
+    b2up_upper = (scalar[:, :, -3:-2] - scalar[:, :, -2:-1]) ** 2
+    # # Original WENO
+    # w1up = (1.0 / 3.0) / (weps + b1up_upper) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up_upper) ** 2
+    # Improved smoothness indicators (Borges et al., 2008, JCP)
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_upper-b2up_upper)/(b1up_upper+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_upper-b2up_upper)/(b2up_upper+weps))**2)
+    scalar_u1 = (w1up * ((-1.0 / 2.0) * scalar[:, :, -4:-3] + (3.0 / 2.0) * scalar[:, :, -3:-2]) +
+               w2up * ((1.0 / 2.0) * scalar[:, :, -3:-2] + (1.0 / 2.0) * scalar[:, :, -2:-1])
+               ) / (w1up + w2up)
+    zero4w = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, 1))
+    scalar_upward = jnp.concatenate((zero4w,
+                                     scalar_l1,
+                                     weno5_upward,
+                                     scalar_u1,
+                                     zero4w), axis=2)
+    
+    # If w < 0, downward
+    b1dn = ((13.0 / 12.0) * (scalar[:,:,5:] - 2.0 * scalar[:,:,4:-1] + scalar[:,:,3:-2]) ** 2
+           + 0.25 * (scalar[:,:,5:] - 4.0 * scalar[:,:,4:-1] + 3.0 * scalar[:,:,3:-2]) ** 2)
+    b2dn = ((13.0 / 12.0) * (scalar[:,:,4:-1] - 2.0 * scalar[:,:,3:-2] + scalar[:,:,2:-3]) ** 2
+           + 0.25 * (scalar[:,:,4:-1] - scalar[:,:,2:-3]) ** 2)
+    b3dn = ((13.0 / 12.0) * (scalar[:,:,3:-2] - 2.0 * scalar[:,:,2:-3] + scalar[:,:,1:-4]) ** 2
+           + 0.25 * (3.0 * scalar[:,:,3:-2] - 4.0 * scalar[:,:,2:-3] + scalar[:,:,1:-4]) ** 2)
+    # w1dn = 0.1 / (weps + b1dn) ** 2
+    # w2dn = 0.6 / (weps + b2dn) ** 2
+    # w3dn = 0.3 / (weps + b3dn) ** 2
+    w1dn = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b1dn+weps))**2)       
+    w2dn = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b2dn+weps))**2)
+    w3dn = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b3dn+weps))**2)
+    weno5_downward = ((w1dn * (
+            (2.0/6.0) * scalar[:,:,5:] + (-7.0/6.0) * scalar[:,:,4:-1] + (11.0/6.0)*scalar[:,:,3:-2]) +
+                w2dn * ((-1.0/6.0) * scalar[:,:,4:-1] + (5.0/6.0) * scalar[:,:,3:-2] + (2.0/6.0) * scalar[:,:,2:-3]) +
+                w3dn * ((2.0/6.0) * scalar[:,:,3:-2] + (5.0/6.0) * scalar[:,:,2:-3] + (-1.0/6.0) * scalar[:,:,1:-4])) /
+               (w1dn + w2dn + w3dn))
+    # use WENO3 and centered difference for near-boundary points
+    b1dn_upper = (scalar[:, :, -2:-1] - scalar[:, :, -3:-2]) ** 2
+    b2dn_upper = (scalar[:, :, -3:-2] - scalar[:, :, -4:-3]) ** 2
+    # # Original WENO
+    # w1dn = (1.0 / 3.0) / (weps + b1dn_upper) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn_upper) ** 2
+    # Improved smoothness indicators
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_upper-b2dn_upper)/(b1dn_upper+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_upper-b2dn_upper)/(b2dn_upper+weps))**2)
+    weno3_downward = (w1dn * ((-1.0 / 2.0) * scalar[:, :, -2:-1] + (3.0 / 2.0) * scalar[:, :, -3:-2]) +
+                      w2dn * ((1.0 / 2.0) * scalar[:, :, -3:-2] + (1.0 / 2.0) * scalar[:, :, -4:-3])
+                      ) / (w1dn + w2dn)
+    weno5_downward = weno5_downward.at[:, :, -1:].set(weno3_downward)
+    scalar_u1 = 0.5 * (scalar[:, :, -2:-1] + scalar[:, :, -3:-2])
+    b1dn_lower = (scalar[:, :, 3:4] - scalar[:, :, 2:3]) ** 2
+    b2dn_lower = (scalar[:, :, 2:3] - scalar[:, :, 1:2]) ** 2
+    # # Original WENO
+    # w1dn = (1.0 / 3.0) / (weps + b1dn_lower) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn_lower) ** 2
+    # Improved smoothness indicators
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_lower-b2dn_lower)/(b1dn_lower+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_lower-b2dn_lower)/(b2dn_lower+weps))**2)
+    scalar_l1 = (w1dn * ((-1.0 / 2.0) * scalar[:, :, 3:4] + (3.0 / 2.0) * scalar[:, :, 2:3]) +
+                      w2dn * ((1.0 / 2.0) * scalar[:, :, 2:3] + (1.0 / 2.0) * scalar[:, :, 1:2])
+                      ) / (w1dn + w2dn)
+    scalar_downward = jnp.concatenate((zero4w,
+                                       scalar_l1,
+                                       weno5_downward,
+                                       scalar_u1,
+                                       zero4w), axis=2)
+
+    rho0w = 0.5 * (rho0[:, :, 0:-1] + rho0[:, :, 1:]) * w[:, :, 1:-1]  # rho0*w at w points
+    flux = jax.lax.select(rho0w >= 0.0, rho0w * scalar_upward, rho0w * scalar_downward)
+    # We have zero flux at bottom and top. It can be modified later by a boundary condition function
+    # nz+1 layers, ghost points discarded
+    vertical_flux = flux[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, :]
+    return vertical_flux
+
+
 def horizontal_flux_scalar(weps, rho0, u, v, scalar):
     """ Horizontal scalar fluxes using 5th-order WENO
 
@@ -249,9 +370,14 @@ def horizontal_flux_scalar(weps, rho0, u, v, scalar):
            + 0.25 * (scalar[1:-4, :, :] - scalar[3:-2, :, :]) ** 2)
     b3w = ((13.0 / 12.0) * (scalar[2:-3, :, :] - 2.0 * scalar[3:-2, :, :] + scalar[4:-1, :, :]) ** 2
            + 0.25 * (3.0 * scalar[2:-3, :, :] - 4.0 * scalar[3:-2, :, :] + scalar[4:-1, :, :]) ** 2)
-    w1w = 0.1 / (weps + b1w) ** 2
-    w2w = 0.6 / (weps + b2w) ** 2
-    w3w = 0.3 / (weps + b3w) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1w = 0.1 / (weps + b1w) ** 2
+    # w2w = 0.6 / (weps + b2w) ** 2
+    # w3w = 0.3 / (weps + b3w) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)
+    w1w = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b1w+weps))**2)       
+    w2w = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b2w+weps))**2)
+    w3w = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b3w+weps))**2)    
     weno5_w = ((w1w * (
             (2.0 / 6.0) * scalar[0:-5, :, :] + (-7.0 / 6.0) * scalar[1:-4, :, :] + (11.0 / 6.0) * scalar[2:-3, :, :]) +
                 w2w * ((-1.0 / 6.0) * scalar[1:-4, :, :] + (5.0 / 6.0) * scalar[2:-3, :, :] + (2.0 / 6.0) * scalar[3:-2, :, :]) +
@@ -264,9 +390,14 @@ def horizontal_flux_scalar(weps, rho0, u, v, scalar):
            + 0.25 * (scalar[4:-1, :, :] - scalar[2:-3, :, :]) ** 2)
     b3e = ((13.0 / 12.0) * (scalar[3:-2, :, :] - 2.0 * scalar[2:-3, :, :] + scalar[1:-4, :, :]) ** 2
            + 0.25 * (3.0 * scalar[3:-2, :, :] - 4.0 * scalar[2:-3, :, :] + scalar[1:-4, :, :]) ** 2)
-    w1e = 0.1 / (weps + b1e) ** 2
-    w2e = 0.6 / (weps + b2e) ** 2
-    w3e = 0.3 / (weps + b3e) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1e = 0.1 / (weps + b1e) ** 2
+    # w2e = 0.6 / (weps + b2e) ** 2
+    # w3e = 0.3 / (weps + b3e) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)
+    w1e = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b1e+weps))**2)       
+    w2e = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b2e+weps))**2)
+    w3e = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b3e+weps))**2) 
     weno5_e = ((w1e * (
             (2.0 / 6.0) * scalar[5:, :, :] + (-7.0 / 6.0) * scalar[4:-1, :, :] + (11.0 / 6.0) * scalar[3:-2, :, :]) +
                 w2e * ((-1.0 / 6.0) * scalar[4:-1, :, :] + (5.0 / 6.0) * scalar[3:-2, :, :] + (2.0 / 6.0) * scalar[2:-3, :, :]) +
@@ -285,9 +416,14 @@ def horizontal_flux_scalar(weps, rho0, u, v, scalar):
            + 0.25 * (scalar[:, 1:-4, :] - scalar[:, 3:-2, :]) ** 2)
     b3s = ((13.0 / 12.0) * (scalar[:, 2:-3, :] - 2.0 * scalar[:, 3:-2, :] + scalar[:, 4:-1, :]) ** 2
            + 0.25 * (3.0 * scalar[:, 2:-3, :] - 4.0 * scalar[:, 3:-2, :] + scalar[:, 4:-1, :]) ** 2)
-    w1s = 0.1 / (weps + b1s) ** 2
-    w2s = 0.6 / (weps + b2s) ** 2
-    w3s = 0.3 / (weps + b3s) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1s = 0.1 / (weps + b1s) ** 2
+    # w2s = 0.6 / (weps + b2s) ** 2
+    # w3s = 0.3 / (weps + b3s) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)
+    w1s = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b1s+weps))**2)
+    w2s = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b2s+weps))**2)
+    w3s = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b3s+weps))**2)
     weno5_s = ((w1s * (
             (2.0 / 6.0) * scalar[:, 0:-5, :] + (-7.0 / 6.0) * scalar[:, 1:-4, :] + (11.0 / 6.0) * scalar[:, 2:-3, :]) +
                 w2s * ((-1.0 / 6.0) * scalar[:, 1:-4, :] + (5.0 / 6.0) * scalar[:, 2:-3, :] + (2.0 / 6.0) * scalar[:, 3:-2, :]) +
@@ -300,9 +436,14 @@ def horizontal_flux_scalar(weps, rho0, u, v, scalar):
            + 0.25 * (scalar[:, 4:-1, :] - scalar[:, 2:-3, :]) ** 2)
     b3n = ((13.0 / 12.0) * (scalar[:, 3:-2, :] - 2.0 * scalar[:, 2:-3, :] + scalar[:, 1:-4, :]) ** 2
            + 0.25 * (3.0 * scalar[:, 3:-2, :] - 4.0 * scalar[:, 2:-3, :] + scalar[:, 1:-4, :]) ** 2)
-    w1n = 0.1 / (weps + b1n) ** 2
-    w2n = 0.6 / (weps + b2n) ** 2
-    w3n = 0.3 / (weps + b3n) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1n = 0.1 / (weps + b1n) ** 2
+    # w2n = 0.6 / (weps + b2n) ** 2
+    # w3n = 0.3 / (weps + b3n) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)
+    w1n = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b1n+weps))**2)
+    w2n = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b2n+weps))**2)
+    w3n = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b3n+weps))**2)
     weno5_n = ((w1n * (
             (2.0 / 6.0) * scalar[:, 5:, :] + (-7.0 / 6.0) * scalar[:, 4:-1, :] + (11.0 / 6.0) * scalar[:, 3:-2, :]) +
                 w2n * ((-1.0 / 6.0) * scalar[:, 4:-1, :] + (5.0 / 6.0) * scalar[:, 3:-2, :] + (2.0 / 6.0) * scalar[:, 2:-3, :]) +
@@ -324,8 +465,10 @@ def vertical_flux_u(weps, rho0, w, u):
     # If w >= 0
     b1up = (u[:, :, 0:-3] - u[:, :, 1:-2]) ** 2
     b2up = (u[:, :, 1:-2] - u[:, :, 2:-1]) ** 2
-    w1up = (1.0 / 3.0) / (weps + b1up) ** 2
-    w2up = (2.0 / 3.0) / (weps + b2up) ** 2
+    # w1up = (1.0 / 3.0) / (weps + b1up) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up) ** 2
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b2up)/(b1up+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b2up)/(b2up+weps))**2)
     weno3_upward = (w1up * ((-1.0 / 2.0) * u[:, :, 0:-3] + (3.0 / 2.0) * u[:, :, 1:-2]) +
                     w2up * ((1.0 / 2.0) * u[:, :, 1:-2] + (1.0 / 2.0) * u[:, :, 2:-1])
                     ) / (w1up + w2up)
@@ -333,14 +476,16 @@ def vertical_flux_u(weps, rho0, w, u):
     # If w < 0
     b1dn = (u[:, :, 3:] - u[:, :, 2:-1]) ** 2
     b2dn = (u[:, :, 2:-1] - u[:, :, 1:-2]) ** 2
-    w1dn = (1.0 / 3.0) / (weps + b1dn) ** 2
-    w2dn = (2.0 / 3.0) / (weps + b2dn) ** 2
+    # w1dn = (1.0 / 3.0) / (weps + b1dn) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn) ** 2
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b2dn)/(b1dn+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b2dn)/(b2dn+weps))**2)
     weno3_downward = (w1dn * ((-1.0 / 2.0) * u[:, :, 3:] + (3.0 / 2.0) * u[:, :, 2:-1]) +
                       w2dn * ((1.0 / 2.0) * u[:, :, 2:-1] + (1.0 / 2.0) * u[:, :, 1:-2])
                       ) / (w1dn + w2dn)
     weno3_downward = weno3_downward.at[:, :, -1].set(0.5 * (u[:, :, -2] + u[:, :, -3]))
     # reset reconstruction at the penultimate level (w point), assuming ngz=1
-
+    
     rho0w = 0.5 * (rho0[:, :, 1:-2] + rho0[:, :, 2:-1]) * w[:, :, 2:-2]
     rho0w8u = 0.5 * (rho0w[0:-1, :, :] + rho0w[1:, :, :])
     # rho0*w above u point at the w level
@@ -351,6 +496,123 @@ def vertical_flux_u(weps, rho0, w, u):
     vertical_flux = jnp.concatenate((zero4w, flux[nl.ngx - 1:-(nl.ngx - 1), nl.ngy:-nl.ngy, :], zero4w), axis=2)
     # nz+1 layers, ghost points discarded
 
+    return vertical_flux
+
+
+def vertical_flux_u2(weps, rho0, w, u):
+    """ Vertical u-momentum flux using 5th-order WENO
+
+    Original WENO5 from Jiang adn Shu, 1996, JCP
+    """
+    # If w >= 0, upward
+    b1up = ((13.0 / 12.0) * (u[:,:,0:-5] - 2.0*u[:,:,1:-4] + u[:,:,2:-3]) ** 2
+           + 0.25 * (u[:,:,0:-5] - 4.0*u[:,:,1:-4] + 3.0*u[:,:,2:-3]) ** 2)
+    b2up = ((13.0 / 12.0) * (u[:,:,1:-4] - 2.0*u[:,:,2:-3] + u[:,:,3:-2]) ** 2
+           + 0.25 * (u[:,:,1:-4] - u[:,:,3:-2]) ** 2)
+    b3up = ((13.0 / 12.0) * (u[:,:,2:-3] - 2.0*u[:,:,3:-2] + u[:,:,4:-1]) ** 2
+           + 0.25 * (3.0 * u[:,:,2:-3] - 4.0 * u[:,:,3:-2] + u[:,:,4:-1]) ** 2)
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1up = 0.1 / (weps + b1up) ** 2
+    # w2up = 0.6 / (weps + b2up) ** 2
+    # w3up = 0.3 / (weps + b3up) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)
+    w1up = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b1up+weps))**2)       
+    w2up = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b2up+weps))**2)
+    w3up = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b3up+weps))**2)
+    weno5_upward = ((w1up * (
+            (2.0/6.0) * u[:,:,0:-5] + (-7.0/6.0)*u[:,:,1:-4] + (11.0/6.0) * u[:,:,2:-3]) +
+                w2up * ((-1.0/6.0) * u[:,:,1:-4] + (5.0/6.0) * u[:,:,2:-3] + (2.0/6.0) * u[:,:,3:-2]) +
+                w3up * ((2.0/6.0) * u[:,:,2:-3] + (5.0/6.0) * u[:,:,3:-2] + (-1.0/6.0) * u[:,:,4:-1])) /
+               (w1up + w2up + w3up))
+    # use WENO3 and centered difference for near-boundary points
+    b1up_lower = (u[:, :, 1:2] - u[:, :, 2:3]) ** 2
+    b2up_lower = (u[:, :, 2:3] - u[:, :, 3:4]) ** 2
+    # # Original WENO
+    # w1up = (1.0 / 3.0) / (weps + b1up_lower) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up_lower) ** 2
+    # Improved smoothness indicators (Borges et al., 2008, JCP)
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_lower-b2up_lower)/(b1up_lower+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_lower-b2up_lower)/(b2up_lower+weps))**2)
+    weno3_upward = (w1up * ((-1.0 / 2.0) * u[:, :, 1:2] + (3.0 / 2.0) * u[:, :, 2:3]) +
+                    w2up * ((1.0 / 2.0) * u[:, :, 2:3] + (1.0 / 2.0) * u[:, :, 3:4])
+                    ) / (w1up + w2up)
+    weno5_upward = weno5_upward.at[:, :, 0:1].set(weno3_upward)
+    u_l1 = 0.5 * (u[:, :, 1:2] + u[:, :, 2:3])
+    b1up_upper = (u[:, :, -4:-3] - u[:, :, -3:-2]) ** 2
+    b2up_upper = (u[:, :, -3:-2] - u[:, :, -2:-1]) ** 2
+    # # Original WENO
+    # w1up = (1.0 / 3.0) / (weps + b1up_upper) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up_upper) ** 2
+    # Improved smoothness indicators (Borges et al., 2008, JCP)
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_upper-b2up_upper)/(b1up_upper+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_upper-b2up_upper)/(b2up_upper+weps))**2)
+    u_u1 = (w1up * ((-1.0 / 2.0) * u[:, :, -4:-3] + (3.0 / 2.0) * u[:, :, -3:-2]) +
+               w2up * ((1.0 / 2.0) * u[:, :, -3:-2] + (1.0 / 2.0) * u[:, :, -2:-1])
+               ) / (w1up + w2up)
+    zero4w = jnp.zeros((nl.nx+1+2*nl.ngx, nl.ny+2*nl.ngy, 1))
+    u_upward = jnp.concatenate((zero4w,
+                                u_l1,
+                                weno5_upward,
+                                u_u1,
+                                zero4w), axis=2)
+    
+    # If w < 0, downward
+    b1dn = ((13.0 / 12.0) * (u[:,:,5:] - 2.0 * u[:,:,4:-1] + u[:,:,3:-2]) ** 2
+           + 0.25 * (u[:,:,5:] - 4.0 * u[:,:,4:-1] + 3.0 * u[:,:,3:-2]) ** 2)
+    b2dn = ((13.0 / 12.0) * (u[:,:,4:-1] - 2.0 * u[:,:,3:-2] + u[:,:,2:-3]) ** 2
+           + 0.25 * (u[:,:,4:-1] - u[:,:,2:-3]) ** 2)
+    b3dn = ((13.0 / 12.0) * (u[:,:,3:-2] - 2.0 * u[:,:,2:-3] + u[:,:,1:-4]) ** 2
+           + 0.25 * (3.0 * u[:,:,3:-2] - 4.0 * u[:,:,2:-3] + u[:,:,1:-4]) ** 2)
+    # w1dn = 0.1 / (weps + b1dn) ** 2
+    # w2dn = 0.6 / (weps + b2dn) ** 2
+    # w3dn = 0.3 / (weps + b3dn) ** 2
+    w1dn = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b1dn+weps))**2)       
+    w2dn = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b2dn+weps))**2)
+    w3dn = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b3dn+weps))**2)
+    weno5_downward = ((w1dn * (
+            (2.0/6.0) * u[:,:,5:] + (-7.0/6.0) * u[:,:,4:-1] + (11.0/6.0)*u[:,:,3:-2]) +
+                w2dn * ((-1.0/6.0) * u[:,:,4:-1] + (5.0/6.0) * u[:,:,3:-2] + (2.0/6.0) * u[:,:,2:-3]) +
+                w3dn * ((2.0/6.0) * u[:,:,3:-2] + (5.0/6.0) * u[:,:,2:-3] + (-1.0/6.0) * u[:,:,1:-4])) /
+               (w1dn + w2dn + w3dn))
+    # use WENO3 and centered difference for near-boundary points
+    b1dn_upper = (u[:, :, -2:-1] - u[:, :, -3:-2]) ** 2
+    b2dn_upper = (u[:, :, -3:-2] - u[:, :, -4:-3]) ** 2
+    # # Original WENO
+    # w1dn = (1.0 / 3.0) / (weps + b1dn_upper) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn_upper) ** 2
+    # Improved smoothness indicators
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_upper-b2dn_upper)/(b1dn_upper+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_upper-b2dn_upper)/(b2dn_upper+weps))**2)
+    weno3_downward = (w1dn * ((-1.0 / 2.0) * u[:, :, -2:-1] + (3.0 / 2.0) * u[:, :, -3:-2]) +
+                      w2dn * ((1.0 / 2.0) * u[:, :, -3:-2] + (1.0 / 2.0) * u[:, :, -4:-3])
+                      ) / (w1dn + w2dn)
+    weno5_downward = weno5_downward.at[:, :, -1:].set(weno3_downward)
+    u_u1 = 0.5 * (u[:, :, -2:-1] + u[:, :, -3:-2])
+    b1dn_lower = (u[:, :, 3:4] - u[:, :, 2:3]) ** 2
+    b2dn_lower = (u[:, :, 2:3] - u[:, :, 1:2]) ** 2
+    # # Original WENO
+    # w1dn = (1.0 / 3.0) / (weps + b1dn_lower) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn_lower) ** 2
+    # Improved smoothness indicators
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_lower-b2dn_lower)/(b1dn_lower+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_lower-b2dn_lower)/(b2dn_lower+weps))**2)
+    u_l1 = (w1dn * ((-1.0 / 2.0) * u[:, :, 3:4] + (3.0 / 2.0) * u[:, :, 2:3]) +
+                      w2dn * ((1.0 / 2.0) * u[:, :, 2:3] + (1.0 / 2.0) * u[:, :, 1:2])
+                      ) / (w1dn + w2dn)
+    u_downward = jnp.concatenate((zero4w,
+                                  u_l1,
+                                  weno5_downward,
+                                  u_u1,
+                                  zero4w), axis=2)
+    
+    rho0w = 0.5 * (rho0[:, :, 0:-1] + rho0[:, :, 1:]) * w[:, :, 1:-1]
+    rho0w8u = 0.5 * (rho0w[0:-1, :, :] + rho0w[1:, :, :])
+    # rho0*w above u point at the w level
+    flux = jax.lax.select(rho0w8u >= 0.0, rho0w8u * u_upward[1:-1, :, :],
+                          rho0w8u * u_downward[1:-1, :, :])
+    # We have zero flux at bottom and top. It can be modified later by a boundary condition function
+    vertical_flux = flux[nl.ngx - 1:-(nl.ngx - 1), nl.ngy:-nl.ngy, :]
+    # nz+1 layers, ghost points discarded
     return vertical_flux
 
 
@@ -367,9 +629,14 @@ def horizontal_flux_u(weps, rho0, u, v):
            + 0.25 * (u[1:-4, :, :] - u[3:-2, :, :]) ** 2)
     b3w = ((13.0 / 12.0) * (u[2:-3, :, :] - 2.0 * u[3:-2, :, :] + u[4:-1, :, :]) ** 2
            + 0.25 * (3.0 * u[2:-3, :, :] - 4.0 * u[3:-2, :, :] + u[4:-1, :, :]) ** 2)
-    w1w = 0.1 / (weps + b1w) ** 2
-    w2w = 0.6 / (weps + b2w) ** 2
-    w3w = 0.3 / (weps + b3w) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1w = 0.1 / (weps + b1w) ** 2
+    # w2w = 0.6 / (weps + b2w) ** 2
+    # w3w = 0.3 / (weps + b3w) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP) 
+    w1w = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b1w+weps))**2)       
+    w2w = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b2w+weps))**2)
+    w3w = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b3w+weps))**2)
     weno5_w = ((w1w * ((2.0 / 6.0) * u[0:-5, :, :] + (-7.0 / 6.0) * u[1:-4, :, :] + (11.0 / 6.0) * u[2:-3, :, :]) +
                 w2w * ((-1.0 / 6.0) * u[1:-4, :, :] + (5.0 / 6.0) * u[2:-3, :, :] + (2.0 / 6.0) * u[3:-2, :, :]) +
                 w3w * ((2.0 / 6.0) * u[2:-3, :, :] + (5.0 / 6.0) * u[3:-2, :, :] + (-1.0 / 6.0) * u[4:-1, :, :])) /
@@ -381,9 +648,12 @@ def horizontal_flux_u(weps, rho0, u, v):
            + 0.25 * (u[4:-1, :, :] - u[2:-3, :, :]) ** 2)
     b3e = ((13.0 / 12.0) * (u[3:-2, :, :] - 2.0 * u[2:-3, :, :] + u[1:-4, :, :]) ** 2
            + 0.25 * (3.0 * u[3:-2, :, :] - 4.0 * u[2:-3, :, :] + u[1:-4, :, :]) ** 2)
-    w1e = 0.1 / (weps + b1e) ** 2
-    w2e = 0.6 / (weps + b2e) ** 2
-    w3e = 0.3 / (weps + b3e) ** 2
+    # w1e = 0.1 / (weps + b1e) ** 2
+    # w2e = 0.6 / (weps + b2e) ** 2
+    # w3e = 0.3 / (weps + b3e) ** 2
+    w1e = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b1e+weps))**2)       
+    w2e = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b2e+weps))**2)
+    w3e = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b3e+weps))**2)
     weno5_e = ((w1e * ((2.0 / 6.0) * u[5:, :, :] + (-7.0 / 6.0) * u[4:-1, :, :] + (11.0 / 6.0) * u[3:-2, :, :]) +
                 w2e * ((-1.0 / 6.0) * u[4:-1, :, :] + (5.0 / 6.0) * u[3:-2, :, :] + (2.0 / 6.0) * u[2:-3, :, :]) +
                 w3e * ((2.0 / 6.0) * u[3:-2, :, :] + (5.0 / 6.0) * u[2:-3, :, :] + (-1.0 / 6.0) * u[1:-4, :, :])) /
@@ -402,9 +672,14 @@ def horizontal_flux_u(weps, rho0, u, v):
            + 0.25 * (u[:, 1:-4, :] - u[:, 3:-2, :]) ** 2)
     b3s = ((13.0 / 12.0) * (u[:, 2:-3, :] - 2.0 * u[:, 3:-2, :] + u[:, 4:-1, :]) ** 2
            + 0.25 * (3.0 * u[:, 2:-3, :] - 4.0 * u[:, 3:-2, :] + u[:, 4:-1, :]) ** 2)
-    w1s = 0.1 / (weps + b1s) ** 2
-    w2s = 0.6 / (weps + b2s) ** 2
-    w3s = 0.3 / (weps + b3s) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1s = 0.1 / (weps + b1s) ** 2
+    # w2s = 0.6 / (weps + b2s) ** 2
+    # w3s = 0.3 / (weps + b3s) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP) 
+    w1s = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b1s+weps))**2)       
+    w2s = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b2s+weps))**2)
+    w3s = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b3s+weps))**2)
     weno5_s = ((w1s * ((2.0 / 6.0) * u[:, 0:-5, :] + (-7.0 / 6.0) * u[:, 1:-4, :] + (11.0 / 6.0) * u[:, 2:-3, :]) +
                 w2s * ((-1.0 / 6.0) * u[:, 1:-4, :] + (5.0 / 6.0) * u[:, 2:-3, :] + (2.0 / 6.0) * u[:, 3:-2, :]) +
                 w3s * ((2.0 / 6.0) * u[:, 2:-3, :] + (5.0 / 6.0) * u[:, 3:-2, :] + (-1.0 / 6.0) * u[:, 4:-1, :])) /
@@ -416,9 +691,14 @@ def horizontal_flux_u(weps, rho0, u, v):
            + 0.25 * (u[:, 4:-1, :] - u[:, 2:-3, :]) ** 2)
     b3n = ((13.0 / 12.0) * (u[:, 3:-2, :] - 2.0 * u[:, 2:-3, :] + u[:, 1:-4, :]) ** 2
            + 0.25 * (3.0 * u[:, 3:-2, :] - 4.0 * u[:, 2:-3, :] + u[:, 1:-4, :]) ** 2)
-    w1n = 0.1 / (weps + b1n) ** 2
-    w2n = 0.6 / (weps + b2n) ** 2
-    w3n = 0.3 / (weps + b3n) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1n = 0.1 / (weps + b1n) ** 2
+    # w2n = 0.6 / (weps + b2n) ** 2
+    # w3n = 0.3 / (weps + b3n) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP) 
+    w1n = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b1n+weps))**2)       
+    w2n = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b2n+weps))**2)
+    w3n = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b3n+weps))**2)    
     weno5_n = ((w1n * ((2.0 / 6.0) * u[:, 5:, :] + (-7.0 / 6.0) * u[:, 4:-1, :] + (11.0 / 6.0) * u[:, 3:-2, :]) +
                 w2n * ((-1.0 / 6.0) * u[:, 4:-1, :] + (5.0 / 6.0) * u[:, 3:-2, :] + (2.0 / 6.0) * u[:, 2:-3, :]) +
                 w3n * ((2.0 / 6.0) * u[:, 3:-2, :] + (5.0 / 6.0) * u[:, 2:-3, :] + (-1.0 / 6.0) * u[:, 1:-4, :])) /
@@ -440,8 +720,10 @@ def vertical_flux_v(weps, rho0, w, v):
     # If w >= 0
     b1up = (v[:, :, 0:-3] - v[:, :, 1:-2]) ** 2
     b2up = (v[:, :, 1:-2] - v[:, :, 2:-1]) ** 2
-    w1up = (1.0 / 3.0) / (weps + b1up) ** 2
-    w2up = (2.0 / 3.0) / (weps + b2up) ** 2
+    # w1up = (1.0 / 3.0) / (weps + b1up) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up) ** 2
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b2up)/(b1up+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b2up)/(b2up+weps))**2)
     weno3_upward = (w1up * ((-1.0 / 2.0) * v[:, :, 0:-3] + (3.0 / 2.0) * v[:, :, 1:-2]) +
                     w2up * ((1.0 / 2.0) * v[:, :, 1:-2] + (1.0 / 2.0) * v[:, :, 2:-1])
                     ) / (w1up + w2up)
@@ -449,8 +731,10 @@ def vertical_flux_v(weps, rho0, w, v):
     # If w < 0
     b1dn = (v[:, :, 3:] - v[:, :, 2:-1]) ** 2
     b2dn = (v[:, :, 2:-1] - v[:, :, 1:-2]) ** 2
-    w1dn = (1.0 / 3.0) / (weps + b1dn) ** 2
-    w2dn = (2.0 / 3.0) / (weps + b2dn) ** 2
+    # w1dn = (1.0 / 3.0) / (weps + b1dn) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn) ** 2
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b2dn)/(b1dn+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b2dn)/(b2dn+weps))**2)
     weno3_downward = (w1dn * ((-1.0 / 2.0) * v[:, :, 3:] + (3.0 / 2.0) * v[:, :, 2:-1]) +
                       w2dn * ((1.0 / 2.0) * v[:, :, 2:-1] + (1.0 / 2.0) * v[:, :, 1:-2])
                       ) / (w1dn + w2dn)
@@ -470,6 +754,123 @@ def vertical_flux_v(weps, rho0, w, v):
     return vertical_flux
 
 
+def vertical_flux_v2(weps, rho0, w, v):
+    """ Vertical v-momentum flux using 5th-order WENO
+
+    Original WENO5 from Jiang adn Shu, 1996, JCP
+    """
+    # If w >= 0, upward
+    b1up = ((13.0 / 12.0) * (v[:,:,0:-5] - 2.0*v[:,:,1:-4] + v[:,:,2:-3]) ** 2
+           + 0.25 * (v[:,:,0:-5] - 4.0*v[:,:,1:-4] + 3.0*v[:,:,2:-3]) ** 2)
+    b2up = ((13.0 / 12.0) * (v[:,:,1:-4] - 2.0*v[:,:,2:-3] + v[:,:,3:-2]) ** 2
+           + 0.25 * (v[:,:,1:-4] - v[:,:,3:-2]) ** 2)
+    b3up = ((13.0 / 12.0) * (v[:,:,2:-3] - 2.0*v[:,:,3:-2] + v[:,:,4:-1]) ** 2
+           + 0.25 * (3.0 * v[:,:,2:-3] - 4.0 * v[:,:,3:-2] + v[:,:,4:-1]) ** 2)
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1up = 0.1 / (weps + b1up) ** 2
+    # w2up = 0.6 / (weps + b2up) ** 2
+    # w3up = 0.3 / (weps + b3up) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)
+    w1up = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b1up+weps))**2)       
+    w2up = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b2up+weps))**2)
+    w3up = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b3up+weps))**2)
+    weno5_upward = ((w1up * (
+            (2.0/6.0) * v[:,:,0:-5] + (-7.0/6.0)*v[:,:,1:-4] + (11.0/6.0) * v[:,:,2:-3]) +
+                w2up * ((-1.0/6.0) * v[:,:,1:-4] + (5.0/6.0) * v[:,:,2:-3] + (2.0/6.0) * v[:,:,3:-2]) +
+                w3up * ((2.0/6.0) * v[:,:,2:-3] + (5.0/6.0) * v[:,:,3:-2] + (-1.0/6.0) * v[:,:,4:-1])) /
+               (w1up + w2up + w3up))
+    # use WENO3 and centered difference for near-boundary points
+    b1up_lower = (v[:, :, 1:2] - v[:, :, 2:3]) ** 2
+    b2up_lower = (v[:, :, 2:3] - v[:, :, 3:4]) ** 2
+    # # Original WENO
+    # w1up = (1.0 / 3.0) / (weps + b1up_lower) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up_lower) ** 2
+    # Improved smoothness indicators (Borges et al., 2008, JCP)
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_lower-b2up_lower)/(b1up_lower+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_lower-b2up_lower)/(b2up_lower+weps))**2)
+    weno3_upward = (w1up * ((-1.0 / 2.0) * v[:, :, 1:2] + (3.0 / 2.0) * v[:, :, 2:3]) +
+                    w2up * ((1.0 / 2.0) * v[:, :, 2:3] + (1.0 / 2.0) * v[:, :, 3:4])
+                    ) / (w1up + w2up)
+    weno5_upward = weno5_upward.at[:, :, 0:1].set(weno3_upward)
+    v_l1 = 0.5 * (v[:, :, 1:2] + v[:, :, 2:3])
+    b1up_upper = (v[:, :, -4:-3] - v[:, :, -3:-2]) ** 2
+    b2up_upper = (v[:, :, -3:-2] - v[:, :, -2:-1]) ** 2
+    # # Original WENO
+    # w1up = (1.0 / 3.0) / (weps + b1up_upper) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up_upper) ** 2
+    # Improved smoothness indicators (Borges et al., 2008, JCP)
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_upper-b2up_upper)/(b1up_upper+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_upper-b2up_upper)/(b2up_upper+weps))**2)
+    v_u1 = (w1up * ((-1.0 / 2.0) * v[:, :, -4:-3] + (3.0 / 2.0) * v[:, :, -3:-2]) +
+               w2up * ((1.0 / 2.0) * v[:, :, -3:-2] + (1.0 / 2.0) * v[:, :, -2:-1])
+               ) / (w1up + w2up)
+    zero4w = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+1+2*nl.ngy, 1))
+    v_upward = jnp.concatenate((zero4w,
+                                v_l1,
+                                weno5_upward,
+                                v_u1,
+                                zero4w), axis=2)
+    
+    # If w < 0, downward
+    b1dn = ((13.0 / 12.0) * (v[:,:,5:] - 2.0 * v[:,:,4:-1] + v[:,:,3:-2]) ** 2
+           + 0.25 * (v[:,:,5:] - 4.0 * v[:,:,4:-1] + 3.0 * v[:,:,3:-2]) ** 2)
+    b2dn = ((13.0 / 12.0) * (v[:,:,4:-1] - 2.0 * v[:,:,3:-2] + v[:,:,2:-3]) ** 2
+           + 0.25 * (v[:,:,4:-1] - v[:,:,2:-3]) ** 2)
+    b3dn = ((13.0 / 12.0) * (v[:,:,3:-2] - 2.0 * v[:,:,2:-3] + v[:,:,1:-4]) ** 2
+           + 0.25 * (3.0 * v[:,:,3:-2] - 4.0 * v[:,:,2:-3] + v[:,:,1:-4]) ** 2)
+    # w1dn = 0.1 / (weps + b1dn) ** 2
+    # w2dn = 0.6 / (weps + b2dn) ** 2
+    # w3dn = 0.3 / (weps + b3dn) ** 2
+    w1dn = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b1dn+weps))**2)       
+    w2dn = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b2dn+weps))**2)
+    w3dn = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b3dn+weps))**2)
+    weno5_downward = ((w1dn * (
+            (2.0/6.0) * v[:,:,5:] + (-7.0/6.0) * v[:,:,4:-1] + (11.0/6.0)*v[:,:,3:-2]) +
+                w2dn * ((-1.0/6.0) * v[:,:,4:-1] + (5.0/6.0) * v[:,:,3:-2] + (2.0/6.0) * v[:,:,2:-3]) +
+                w3dn * ((2.0/6.0) * v[:,:,3:-2] + (5.0/6.0) * v[:,:,2:-3] + (-1.0/6.0) * v[:,:,1:-4])) /
+               (w1dn + w2dn + w3dn))
+    # use WENO3 and centered difference for near-boundary points
+    b1dn_upper = (v[:, :, -2:-1] - v[:, :, -3:-2]) ** 2
+    b2dn_upper = (v[:, :, -3:-2] - v[:, :, -4:-3]) ** 2
+    # # Original WENO
+    # w1dn = (1.0 / 3.0) / (weps + b1dn_upper) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn_upper) ** 2
+    # Improved smoothness indicators
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_upper-b2dn_upper)/(b1dn_upper+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_upper-b2dn_upper)/(b2dn_upper+weps))**2)
+    weno3_downward = (w1dn * ((-1.0 / 2.0) * v[:, :, -2:-1] + (3.0 / 2.0) * v[:, :, -3:-2]) +
+                      w2dn * ((1.0 / 2.0) * v[:, :, -3:-2] + (1.0 / 2.0) * v[:, :, -4:-3])
+                      ) / (w1dn + w2dn)
+    weno5_downward = weno5_downward.at[:, :, -1:].set(weno3_downward)
+    v_u1 = 0.5 * (v[:, :, -2:-1] + v[:, :, -3:-2])
+    b1dn_lower = (v[:, :, 3:4] - v[:, :, 2:3]) ** 2
+    b2dn_lower = (v[:, :, 2:3] - v[:, :, 1:2]) ** 2
+    # # Original WENO
+    # w1dn = (1.0 / 3.0) / (weps + b1dn_lower) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn_lower) ** 2
+    # Improved smoothness indicators
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_lower-b2dn_lower)/(b1dn_lower+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_lower-b2dn_lower)/(b2dn_lower+weps))**2)
+    v_l1 = (w1dn * ((-1.0 / 2.0) * v[:, :, 3:4] + (3.0 / 2.0) * v[:, :, 2:3]) +
+                      w2dn * ((1.0 / 2.0) * v[:, :, 2:3] + (1.0 / 2.0) * v[:, :, 1:2])
+                      ) / (w1dn + w2dn)
+    v_downward = jnp.concatenate((zero4w,
+                                  v_l1,
+                                  weno5_downward,
+                                  v_u1,
+                                  zero4w), axis=2)
+
+    rho0w = 0.5 * (rho0[:, :, 0:-1] + rho0[:, :, 1:]) * w[:, :, 1:-1]
+    rho0w8v = 0.5 * (rho0w[:, 0:-1, :] + rho0w[:, 1:, :])
+    # rho0*w above v point at the w level
+    flux = jax.lax.select(rho0w8v >= 0.0, rho0w8v * v_upward[:, 1:-1, :],
+                          rho0w8v * v_downward[:, 1:-1, :])
+    # Having zero flux at bottom and top. It can be modified later by a boundary condition function
+    vertical_flux = flux[nl.ngx:-nl.ngx, nl.ngy - 1:-(nl.ngy - 1), :]
+    # nz+1 layers, ghost points discarded
+    return vertical_flux
+
+
 def horizontal_flux_v(weps, rho0, u, v):
     """ Horizontal v-momentum fluxes using 5th-order WENO
 
@@ -483,9 +884,14 @@ def horizontal_flux_v(weps, rho0, u, v):
            + 0.25 * (v[1:-4, :, :] - v[3:-2, :, :]) ** 2)
     b3w = ((13.0 / 12.0) * (v[2:-3, :, :] - 2.0 * v[3:-2, :, :] + v[4:-1, :, :]) ** 2
            + 0.25 * (3.0 * v[2:-3, :, :] - 4.0 * v[3:-2, :, :] + v[4:-1, :, :]) ** 2)
-    w1w = 0.1 / (weps + b1w) ** 2
-    w2w = 0.6 / (weps + b2w) ** 2
-    w3w = 0.3 / (weps + b3w) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1w = 0.1 / (weps + b1w) ** 2
+    # w2w = 0.6 / (weps + b2w) ** 2
+    # w3w = 0.3 / (weps + b3w) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)
+    w1w = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b1w+weps))**2)       
+    w2w = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b2w+weps))**2)
+    w3w = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b3w+weps))**2)
     weno5_w = ((w1w * ((2.0 / 6.0) * v[0:-5, :, :] + (-7.0 / 6.0) * v[1:-4, :, :] + (11.0 / 6.0) * v[2:-3, :, :]) +
                 w2w * ((-1.0 / 6.0) * v[1:-4, :, :] + (5.0 / 6.0) * v[2:-3, :, :] + (2.0 / 6.0) * v[3:-2, :, :]) +
                 w3w * ((2.0 / 6.0) * v[2:-3, :, :] + (5.0 / 6.0) * v[3:-2, :, :] + (-1.0 / 6.0) * v[4:-1, :, :])) /
@@ -497,9 +903,12 @@ def horizontal_flux_v(weps, rho0, u, v):
            + 0.25 * (v[4:-1, :, :] - v[2:-3, :, :]) ** 2)
     b3e = ((13.0 / 12.0) * (v[3:-2, :, :] - 2.0 * v[2:-3, :, :] + v[1:-4, :, :]) ** 2
            + 0.25 * (3.0 * v[3:-2, :, :] - 4.0 * v[2:-3, :, :] + v[1:-4, :, :]) ** 2)
-    w1e = 0.1 / (weps + b1e) ** 2
-    w2e = 0.6 / (weps + b2e) ** 2
-    w3e = 0.3 / (weps + b3e) ** 2
+    # w1e = 0.1 / (weps + b1e) ** 2
+    # w2e = 0.6 / (weps + b2e) ** 2
+    # w3e = 0.3 / (weps + b3e) ** 2
+    w1e = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b1e+weps))**2)       
+    w2e = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b2e+weps))**2)
+    w3e = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b3e+weps))**2)
     weno5_e = ((w1e * ((2.0 / 6.0) * v[5:, :, :] + (-7.0 / 6.0) * v[4:-1, :, :] + (11.0 / 6.0) * v[3:-2, :, :]) +
                 w2e * ((-1.0 / 6.0) * v[4:-1, :, :] + (5.0 / 6.0) * v[3:-2, :, :] + (2.0 / 6.0) * v[2:-3, :, :]) +
                 w3e * ((2.0 / 6.0) * v[3:-2, :, :] + (5.0 / 6.0) * v[2:-3, :, :] + (-1.0 / 6.0) * v[1:-4, :, :])) /
@@ -518,9 +927,14 @@ def horizontal_flux_v(weps, rho0, u, v):
            + 0.25 * (v[:, 1:-4, :] - v[:, 3:-2, :]) ** 2)
     b3s = ((13.0 / 12.0) * (v[:, 2:-3, :] - 2.0 * v[:, 3:-2, :] + v[:, 4:-1, :]) ** 2
            + 0.25 * (3.0 * v[:, 2:-3, :] - 4.0 * v[:, 3:-2, :] + v[:, 4:-1, :]) ** 2)
-    w1s = 0.1 / (weps + b1s) ** 2
-    w2s = 0.6 / (weps + b2s) ** 2
-    w3s = 0.3 / (weps + b3s) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1s = 0.1 / (weps + b1s) ** 2
+    # w2s = 0.6 / (weps + b2s) ** 2
+    # w3s = 0.3 / (weps + b3s) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP) 
+    w1s = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b1s+weps))**2)       
+    w2s = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b2s+weps))**2)
+    w3s = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b3s+weps))**2) 
     weno5_s = ((w1s * ((2.0 / 6.0) * v[:, 0:-5, :] + (-7.0 / 6.0) * v[:, 1:-4, :] + (11.0 / 6.0) * v[:, 2:-3, :]) +
                 w2s * ((-1.0 / 6.0) * v[:, 1:-4, :] + (5.0 / 6.0) * v[:, 2:-3, :] + (2.0 / 6.0) * v[:, 3:-2, :]) +
                 w3s * ((2.0 / 6.0) * v[:, 2:-3, :] + (5.0 / 6.0) * v[:, 3:-2, :] + (-1.0 / 6.0) * v[:, 4:-1, :])) /
@@ -532,9 +946,14 @@ def horizontal_flux_v(weps, rho0, u, v):
            + 0.25 * (v[:, 4:-1, :] - v[:, 2:-3, :]) ** 2)
     b3n = ((13.0 / 12.0) * (v[:, 3:-2, :] - 2.0 * v[:, 2:-3, :] + v[:, 1:-4, :]) ** 2
            + 0.25 * (3.0 * v[:, 3:-2, :] - 4.0 * v[:, 2:-3, :] + v[:, 1:-4, :]) ** 2)
-    w1n = 0.1 / (weps + b1n) ** 2
-    w2n = 0.6 / (weps + b2n) ** 2
-    w3n = 0.3 / (weps + b3n) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1n = 0.1 / (weps + b1n) ** 2
+    # w2n = 0.6 / (weps + b2n) ** 2
+    # w3n = 0.3 / (weps + b3n) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP) 
+    w1n = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b1n+weps))**2)       
+    w2n = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b2n+weps))**2)
+    w3n = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b3n+weps))**2)     
     weno5_n = ((w1n * ((2.0 / 6.0) * v[:, 5:, :] + (-7.0 / 6.0) * v[:, 4:-1, :] + (11.0 / 6.0) * v[:, 3:-2, :]) +
                 w2n * ((-1.0 / 6.0) * v[:, 4:-1, :] + (5.0 / 6.0) * v[:, 3:-2, :] + (2.0 / 6.0) * v[:, 2:-3, :]) +
                 w3n * ((2.0 / 6.0) * v[:, 3:-2, :] + (5.0 / 6.0) * v[:, 2:-3, :] + (-1.0 / 6.0) * v[:, 1:-4, :])) /
@@ -548,15 +967,17 @@ def horizontal_flux_v(weps, rho0, u, v):
 
 
 def vertical_flux_w(weps, rho0, w):
-    """ Vertical v-momentum flux using 3rd-order WENO
+    """ Vertical w-momentum flux using 3rd-order WENO
 
     Original WENO3 from Jiang adn Shu, 1996, JCP
     """
     # If w >= 0
     b1up = (w[:, :, 0:-3] - w[:, :, 1:-2]) ** 2
     b2up = (w[:, :, 1:-2] - w[:, :, 2:-1]) ** 2
-    w1up = (1.0 / 3.0) / (weps + b1up) ** 2
-    w2up = (2.0 / 3.0) / (weps + b2up) ** 2
+    # w1up = (1.0 / 3.0) / (weps + b1up) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up) ** 2
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b2up)/(b1up+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b2up)/(b2up+weps))**2)
     weno3_upward = (w1up * ((-1.0 / 2.0) * w[:, :, 0:-3] + (3.0 / 2.0) * w[:, :, 1:-2]) +
                     w2up * ((1.0 / 2.0) * w[:, :, 1:-2] + (1.0 / 2.0) * w[:, :, 2:-1])
                     ) / (w1up + w2up)
@@ -564,8 +985,10 @@ def vertical_flux_w(weps, rho0, w):
     # If w < 0
     b1dn = (w[:, :, 3:] - w[:, :, 2:-1]) ** 2
     b2dn = (w[:, :, 2:-1] - w[:, :, 1:-2]) ** 2
-    w1dn = (1.0 / 3.0) / (weps + b1dn) ** 2
-    w2dn = (2.0 / 3.0) / (weps + b2dn) ** 2
+    # w1dn = (1.0 / 3.0) / (weps + b1dn) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn) ** 2
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b2dn)/(b1dn+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b2dn)/(b2dn+weps))**2)
     weno3_downward = (w1dn * ((-1.0 / 2.0) * w[:, :, 3:] + (3.0 / 2.0) * w[:, :, 2:-1]) +
                       w2dn * ((1.0 / 2.0) * w[:, :, 2:-1] + (1.0 / 2.0) * w[:, :, 1:-2])
                       ) / (w1dn + w2dn)
@@ -585,6 +1008,122 @@ def vertical_flux_w(weps, rho0, w):
     return vertical_flux
 
 
+def vertical_flux_w2(weps, rho0, w):
+    """ Vertical w-momentum flux using 5th-order WENO
+
+    Original WENO5 from Jiang adn Shu, 1996, JCP
+    """
+    # If w >= 0, upward
+    b1up = ((13.0 / 12.0) * (w[:,:,0:-5] - 2.0*w[:,:,1:-4] + w[:,:,2:-3]) ** 2
+           + 0.25 * (w[:,:,0:-5] - 4.0*w[:,:,1:-4] + 3.0*w[:,:,2:-3]) ** 2)
+    b2up = ((13.0 / 12.0) * (w[:,:,1:-4] - 2.0*w[:,:,2:-3] + w[:,:,3:-2]) ** 2
+           + 0.25 * (w[:,:,1:-4] - w[:,:,3:-2]) ** 2)
+    b3up = ((13.0 / 12.0) * (w[:,:,2:-3] - 2.0*w[:,:,3:-2] + w[:,:,4:-1]) ** 2
+           + 0.25 * (3.0 * w[:,:,2:-3] - 4.0 * w[:,:,3:-2] + w[:,:,4:-1]) ** 2)
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1up = 0.1 / (weps + b1up) ** 2
+    # w2up = 0.6 / (weps + b2up) ** 2
+    # w3up = 0.3 / (weps + b3up) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)
+    w1up = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b1up+weps))**2)       
+    w2up = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b2up+weps))**2)
+    w3up = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up-b3up)/(b3up+weps))**2)
+    weno5_upward = ((w1up * (
+            (2.0/6.0) * w[:,:,0:-5] + (-7.0/6.0)*w[:,:,1:-4] + (11.0/6.0) * w[:,:,2:-3]) +
+                w2up * ((-1.0/6.0) * w[:,:,1:-4] + (5.0/6.0) * w[:,:,2:-3] + (2.0/6.0) * w[:,:,3:-2]) +
+                w3up * ((2.0/6.0) * w[:,:,2:-3] + (5.0/6.0) * w[:,:,3:-2] + (-1.0/6.0) * w[:,:,4:-1])) /
+               (w1up + w2up + w3up))
+    # use WENO3 and centered difference for near-boundary points
+    b1up_lower = (w[:, :, 1:2] - w[:, :, 2:3]) ** 2
+    b2up_lower = (w[:, :, 2:3] - w[:, :, 3:4]) ** 2
+    # # Original WENO
+    # w1up = (1.0 / 3.0) / (weps + b1up_lower) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up_lower) ** 2
+    # Improved smoothness indicators (Borges et al., 2008, JCP)
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_lower-b2up_lower)/(b1up_lower+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_lower-b2up_lower)/(b2up_lower+weps))**2)
+    weno3_upward = (w1up * ((-1.0 / 2.0) * w[:, :, 1:2] + (3.0 / 2.0) * w[:, :, 2:3]) +
+                    w2up * ((1.0 / 2.0) * w[:, :, 2:3] + (1.0 / 2.0) * w[:, :, 3:4])
+                    ) / (w1up + w2up)
+    weno5_upward = weno5_upward.at[:, :, 0:1].set(weno3_upward)
+    w_l1 = 0.5 * (w[:, :, 1:2] + w[:, :, 2:3])
+    b1up_upper = (w[:, :, -4:-3] - w[:, :, -3:-2]) ** 2
+    b2up_upper = (w[:, :, -3:-2] - w[:, :, -2:-1]) ** 2
+    # # Original WENO
+    # w1up = (1.0 / 3.0) / (weps + b1up_upper) ** 2
+    # w2up = (2.0 / 3.0) / (weps + b2up_upper) ** 2
+    # Improved smoothness indicators (Borges et al., 2008, JCP)
+    w1up = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_upper-b2up_upper)/(b1up_upper+weps))**2)
+    w2up = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1up_upper-b2up_upper)/(b2up_upper+weps))**2)
+    w_u1 = (w1up * ((-1.0 / 2.0) * w[:, :, -4:-3] + (3.0 / 2.0) * w[:, :, -3:-2]) +
+               w2up * ((1.0 / 2.0) * w[:, :, -3:-2] + (1.0 / 2.0) * w[:, :, -2:-1])
+               ) / (w1up + w2up)
+    zero4w = jnp.zeros((nl.nx+2*nl.ngx, nl.ny+2*nl.ngy, 1))
+    w_upward = jnp.concatenate((zero4w,
+                                w_l1,
+                                weno5_upward,
+                                w_u1,
+                                zero4w), axis=2)
+    
+    # If w < 0, downward
+    b1dn = ((13.0 / 12.0) * (w[:,:,5:] - 2.0 * w[:,:,4:-1] + w[:,:,3:-2]) ** 2
+           + 0.25 * (w[:,:,5:] - 4.0 * w[:,:,4:-1] + 3.0 * w[:,:,3:-2]) ** 2)
+    b2dn = ((13.0 / 12.0) * (w[:,:,4:-1] - 2.0 * w[:,:,3:-2] + w[:,:,2:-3]) ** 2
+           + 0.25 * (w[:,:,4:-1] - w[:,:,2:-3]) ** 2)
+    b3dn = ((13.0 / 12.0) * (w[:,:,3:-2] - 2.0 * w[:,:,2:-3] + w[:,:,1:-4]) ** 2
+           + 0.25 * (3.0 * w[:,:,3:-2] - 4.0 * w[:,:,2:-3] + w[:,:,1:-4]) ** 2)
+    # w1dn = 0.1 / (weps + b1dn) ** 2
+    # w2dn = 0.6 / (weps + b2dn) ** 2
+    # w3dn = 0.3 / (weps + b3dn) ** 2
+    w1dn = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b1dn+weps))**2)       
+    w2dn = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b2dn+weps))**2)
+    w3dn = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn-b3dn)/(b3dn+weps))**2)
+    weno5_downward = ((w1dn * (
+            (2.0/6.0) * w[:,:,5:] + (-7.0/6.0) * w[:,:,4:-1] + (11.0/6.0)*w[:,:,3:-2]) +
+                w2dn * ((-1.0/6.0) * w[:,:,4:-1] + (5.0/6.0) * w[:,:,3:-2] + (2.0/6.0) * w[:,:,2:-3]) +
+                w3dn * ((2.0/6.0) * w[:,:,3:-2] + (5.0/6.0) * w[:,:,2:-3] + (-1.0/6.0) * w[:,:,1:-4])) /
+               (w1dn + w2dn + w3dn))
+    # use WENO3 and centered difference for near-boundary points
+    b1dn_upper = (w[:, :, -2:-1] - w[:, :, -3:-2]) ** 2
+    b2dn_upper = (w[:, :, -3:-2] - w[:, :, -4:-3]) ** 2
+    # # Original WENO
+    # w1dn = (1.0 / 3.0) / (weps + b1dn_upper) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn_upper) ** 2
+    # Improved smoothness indicators
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_upper-b2dn_upper)/(b1dn_upper+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_upper-b2dn_upper)/(b2dn_upper+weps))**2)
+    weno3_downward = (w1dn * ((-1.0 / 2.0) * w[:, :, -2:-1] + (3.0 / 2.0) * w[:, :, -3:-2]) +
+                      w2dn * ((1.0 / 2.0) * w[:, :, -3:-2] + (1.0 / 2.0) * w[:, :, -4:-3])
+                      ) / (w1dn + w2dn)
+    weno5_downward = weno5_downward.at[:, :, -1:].set(weno3_downward)
+    w_u1 = 0.5 * (w[:, :, -2:-1] + w[:, :, -3:-2])
+    b1dn_lower = (w[:, :, 3:4] - w[:, :, 2:3]) ** 2
+    b2dn_lower = (w[:, :, 2:3] - w[:, :, 1:2]) ** 2
+    # # Original WENO
+    # w1dn = (1.0 / 3.0) / (weps + b1dn_lower) ** 2
+    # w2dn = (2.0 / 3.0) / (weps + b2dn_lower) ** 2
+    # Improved smoothness indicators
+    w1dn = (1.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_lower-b2dn_lower)/(b1dn_lower+weps))**2)
+    w2dn = (2.0/3.0) * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1dn_lower-b2dn_lower)/(b2dn_lower+weps))**2)
+    w_l1 = (w1dn * ((-1.0 / 2.0) * w[:, :, 3:4] + (3.0 / 2.0) * w[:, :, 2:3]) +
+                      w2dn * ((1.0 / 2.0) * w[:, :, 2:3] + (1.0 / 2.0) * w[:, :, 1:2])
+                      ) / (w1dn + w2dn)
+    w_downward = jnp.concatenate((zero4w,
+                                  w_l1,
+                                  weno5_downward,
+                                  w_u1,
+                                  zero4w), axis=2)
+
+    rho0w = 0.5 * (w[:, :, 0:-1] + w[:, :, 1:]) * rho0[:, :, :]
+    flux = jax.lax.select(rho0w >= 0.0, rho0w * w_upward, rho0w * w_downward)
+    vertical_flux = flux[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, :]
+    # nz+2 layers, lateral ghost points discarded
+    # The first level is below ground and last level above model top. Let's keep them to make the code in
+    # advection calculation simpler. Moreover, we need the advection tendency at grond (w level) for the
+    # Poisson-like equation later. We create a placeholder level by have a flux below ground/above top.
+    return vertical_flux
+
+
 def horizontal_flux_w(weps, rho0, u, v, w):
     """ Horizontal w-momentum fluxes using 5th-order WENO
 
@@ -598,9 +1137,14 @@ def horizontal_flux_w(weps, rho0, u, v, w):
            + 0.25 * (w[1:-4, :, :] - w[3:-2, :, :]) ** 2)
     b3w = ((13.0 / 12.0) * (w[2:-3, :, :] - 2.0 * w[3:-2, :, :] + w[4:-1, :, :]) ** 2
            + 0.25 * (3.0 * w[2:-3, :, :] - 4.0 * w[3:-2, :, :] + w[4:-1, :, :]) ** 2)
-    w1w = 0.1 / (weps + b1w) ** 2
-    w2w = 0.6 / (weps + b2w) ** 2
-    w3w = 0.3 / (weps + b3w) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP) 
+    # w1w = 0.1 / (weps + b1w) ** 2
+    # w2w = 0.6 / (weps + b2w) ** 2
+    # w3w = 0.3 / (weps + b3w) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP)    
+    w1w = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b1w+weps))**2)       
+    w2w = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b2w+weps))**2)
+    w3w = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1w-b3w)/(b3w+weps))**2)
     weno5_w = ((w1w * ((2.0 / 6.0) * w[0:-5, :, :] + (-7.0 / 6.0) * w[1:-4, :, :] + (11.0 / 6.0) * w[2:-3, :, :]) +
                 w2w * ((-1.0 / 6.0) * w[1:-4, :, :] + (5.0 / 6.0) * w[2:-3, :, :] + (2.0 / 6.0) * w[3:-2, :, :]) +
                 w3w * ((2.0 / 6.0) * w[2:-3, :, :] + (5.0 / 6.0) * w[3:-2, :, :] + (-1.0 / 6.0) * w[4:-1, :, :])) /
@@ -612,9 +1156,12 @@ def horizontal_flux_w(weps, rho0, u, v, w):
            + 0.25 * (w[4:-1, :, :] - w[2:-3, :, :]) ** 2)
     b3e = ((13.0 / 12.0) * (w[3:-2, :, :] - 2.0 * w[2:-3, :, :] + w[1:-4, :, :]) ** 2
            + 0.25 * (3.0 * w[3:-2, :, :] - 4.0 * w[2:-3, :, :] + w[1:-4, :, :]) ** 2)
-    w1e = 0.1 / (weps + b1e) ** 2
-    w2e = 0.6 / (weps + b2e) ** 2
-    w3e = 0.3 / (weps + b3e) ** 2
+    # w1e = 0.1 / (weps + b1e) ** 2
+    # w2e = 0.6 / (weps + b2e) ** 2
+    # w3e = 0.3 / (weps + b3e) ** 2
+    w1e = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b1e+weps))**2)       
+    w2e = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b2e+weps))**2)
+    w3e = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1e-b3e)/(b3e+weps))**2)
     weno5_e = ((w1e * ((2.0 / 6.0) * w[5:, :, :] + (-7.0 / 6.0) * w[4:-1, :, :] + (11.0 / 6.0) * w[3:-2, :, :]) +
                 w2e * ((-1.0 / 6.0) * w[4:-1, :, :] + (5.0 / 6.0) * w[3:-2, :, :] + (2.0 / 6.0) * w[2:-3, :, :]) +
                 w3e * ((2.0 / 6.0) * w[3:-2, :, :] + (5.0 / 6.0) * w[2:-3, :, :] + (-1.0 / 6.0) * w[1:-4, :, :])) /
@@ -634,9 +1181,14 @@ def horizontal_flux_w(weps, rho0, u, v, w):
            + 0.25 * (w[:, 1:-4, :] - w[:, 3:-2, :]) ** 2)
     b3s = ((13.0 / 12.0) * (w[:, 2:-3, :] - 2.0 * w[:, 3:-2, :] + w[:, 4:-1, :]) ** 2
            + 0.25 * (3.0 * w[:, 2:-3, :] - 4.0 * w[:, 3:-2, :] + w[:, 4:-1, :]) ** 2)
-    w1s = 0.1 / (weps + b1s) ** 2
-    w2s = 0.6 / (weps + b2s) ** 2
-    w3s = 0.3 / (weps + b3s) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1s = 0.1 / (weps + b1s) ** 2
+    # w2s = 0.6 / (weps + b2s) ** 2
+    # w3s = 0.3 / (weps + b3s) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP) 
+    w1s = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b1s+weps))**2)       
+    w2s = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b2s+weps))**2)
+    w3s = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1s-b3s)/(b3s+weps))**2) 
     weno5_s = ((w1s * ((2.0 / 6.0) * w[:, 0:-5, :] + (-7.0 / 6.0) * w[:, 1:-4, :] + (11.0 / 6.0) * w[:, 2:-3, :]) +
                 w2s * ((-1.0 / 6.0) * w[:, 1:-4, :] + (5.0 / 6.0) * w[:, 2:-3, :] + (2.0 / 6.0) * w[:, 3:-2, :]) +
                 w3s * ((2.0 / 6.0) * w[:, 2:-3, :] + (5.0 / 6.0) * w[:, 3:-2, :] + (-1.0 / 6.0) * w[:, 4:-1, :])) /
@@ -648,9 +1200,14 @@ def horizontal_flux_w(weps, rho0, u, v, w):
            + 0.25 * (w[:, 4:-1, :] - w[:, 2:-3, :]) ** 2)
     b3n = ((13.0 / 12.0) * (w[:, 3:-2, :] - 2.0 * w[:, 2:-3, :] + w[:, 1:-4, :]) ** 2
            + 0.25 * (3.0 * w[:, 3:-2, :] - 4.0 * w[:, 2:-3, :] + w[:, 1:-4, :]) ** 2)
-    w1n = 0.1 / (weps + b1n) ** 2
-    w2n = 0.6 / (weps + b2n) ** 2
-    w3n = 0.3 / (weps + b3n) ** 2
+    # # Original WENO (eg, Jiang and Shu, 1996, JCP)
+    # w1n = 0.1 / (weps + b1n) ** 2
+    # w2n = 0.6 / (weps + b2n) ** 2
+    # w3n = 0.3 / (weps + b3n) ** 2
+    # Improved smoothness indicators (Borges et al, 2008, JCP) 
+    w1n = 0.1 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b1n+weps))**2)       
+    w2n = 0.6 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b2n+weps))**2)
+    w3n = 0.3 * (1.0 + jnp.fmin(1.0e30, jnp.abs(b1n-b3n)/(b3n+weps))**2)     
     weno5_n = ((w1n * ((2.0 / 6.0) * w[:, 5:, :] + (-7.0 / 6.0) * w[:, 4:-1, :] + (11.0 / 6.0) * w[:, 3:-2, :]) +
                 w2n * ((-1.0 / 6.0) * w[:, 4:-1, :] + (5.0 / 6.0) * w[:, 3:-2, :] + (2.0 / 6.0) * w[:, 2:-3, :]) +
                 w3n * ((2.0 / 6.0) * w[:, 3:-2, :] + (5.0 / 6.0) * w[:, 2:-3, :] + (-1.0 / 6.0) * w[:, 1:-4, :])) /

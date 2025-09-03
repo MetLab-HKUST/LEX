@@ -58,7 +58,7 @@ H &= \rho_A|\Delta \mathbf{u}_h|C_p C_H\Delta \theta
 \end{align}
 where $\rho_A$ is the atmospheric surface density and $C_p$ the specific heat at constant pressure. Since we assume the ocean surface current speed is zero, $\Delta \mathbf{u}_h = \mathbf{u}_h$, the velocity of the lowest model level. The potential temperature difference is $\Delta \theta = \theta_A - \theta_s$, where $\theta_s$ is the surface potential temperature. The specific humidity difference is $\Delta q = q_A - q_s(T_s)$, where $q_s(T_s)$ is the saturation specific humidity at the sea-surface temperature. 
 
-The transfer coefficients are computed at a height $Z_A$ (reference height, typically 10\,m for wind, 2\,m for heat and water) and are functions of the stability parameter $\zeta$,
+The transfer coefficients are computed at a height $Z_A$ (lowest model level height) and are functions of the stability parameter $\zeta$,
 \begin{align}
 C_D &= \kappa^2\left[\ln\left(\frac{Z_A}{Z_{0m}}\right) - \psi_m\right]^{-2} \\
 C_E &= \kappa^2\left[\ln\left(\frac{Z_A}{Z_{0m}}\right) - \psi_m\right]^{-1} 

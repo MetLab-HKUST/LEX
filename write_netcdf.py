@@ -59,7 +59,7 @@ def save2nc(phys_state, sfc_others, grids, sprint_i, model_time):
     theta_1[:, :, :, :] = np.reshape(theta_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                      (1, x_size, y_size, z_size))
 
-    pip_1 = nc_file.createVariable("pip_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    pip_1 = nc_file.createVariable("pip_now", np.float64, ("time", "x", "y", "z"), fill_value=1.0e36)
     pip_1.long_name = "pip for the current time"
     pip_1[:, :, :, :] = np.reshape(pip_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                    (1, x_size, y_size, z_size))
@@ -111,7 +111,7 @@ def save2nc(phys_state, sfc_others, grids, sprint_i, model_time):
                                      (1, x_size, y_size, z4w_size))
 
     if nl.pic_opt:
-        pc_1 = nc_file.createVariable("pip_const_now", np.float32, "time", fill_value=1.0e36)
+        pc_1 = nc_file.createVariable("pip_const_now", np.float64, "time", fill_value=1.0e36)
         pc_1.long_name = "pi' correction constant for the current time"
         pc_1[:] = pip_const
 
@@ -158,14 +158,14 @@ def save2nc_base(base_state, grids):
     nc_file.createDimension("z", nl.nz)
     nc_file.createDimension("time", None)
 
-    x_nc = nc_file.createVariable("x", np.float32, ("x",))
+    x_nc = nc_file.createVariable("x", np.float64, ("x",))
     x_nc.long_name = "x (m)"
-    y_nc = nc_file.createVariable("y", np.float32, ("y",))
+    y_nc = nc_file.createVariable("y", np.float64, ("y",))
     y_nc.long_name = "y (m)"
-    z_nc = nc_file.createVariable("z", np.float32, ("z",))
+    z_nc = nc_file.createVariable("z", np.float64, ("z",))
     z_nc.long_name = "z (m)"
 
-    itime = nc_file.createVariable("time", np.float32, ("time",))
+    itime = nc_file.createVariable("time", np.float64, ("time",))
     itime.long_name = "time (s)"
 
     rho0_theta0, rho0, theta0, pi0, qv0, surface_t = base_state
@@ -178,32 +178,32 @@ def save2nc_base(base_state, grids):
 
     x_size, y_size, z_size = nl.nx, nl.ny, nl.nz
 
-    rho0_theta0_nc = nc_file.createVariable("rho0_theta0", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    rho0_theta0_nc = nc_file.createVariable("rho0_theta0", np.float64, ("time", "x", "y", "z"), fill_value=1.0e36)
     rho0_theta0_nc.long_name = "rho0*theta0"
     rho0_theta0_nc[:, :, :, :] = np.reshape(rho0_theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                             (1, x_size, y_size, z_size))
 
-    theta0_nc = nc_file.createVariable("theta0", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    theta0_nc = nc_file.createVariable("theta0", np.float64, ("time", "x", "y", "z"), fill_value=1.0e36)
     theta0_nc.long_name = "theta0"
     theta0_nc[:, :, :, :] = np.reshape(theta0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                        (1, x_size, y_size, z_size))
 
-    rho0_nc = nc_file.createVariable("rho0", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    rho0_nc = nc_file.createVariable("rho0", np.float64, ("time", "x", "y", "z"), fill_value=1.0e36)
     rho0_nc.long_name = "rho0"
     rho0_nc[:, :, :, :] = np.reshape(rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                      (1, x_size, y_size, z_size))
 
-    qv0_nc = nc_file.createVariable("qv0", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    qv0_nc = nc_file.createVariable("qv0", np.float64, ("time", "x", "y", "z"), fill_value=1.0e36)
     qv0_nc.long_name = "qv0"
     qv0_nc[:, :, :, :] = np.reshape(qv0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                     (1, x_size, y_size, z_size))
 
-    pi0_nc = nc_file.createVariable("pi0", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36)
+    pi0_nc = nc_file.createVariable("pi0", np.float64, ("time", "x", "y", "z"), fill_value=1.0e36)
     pi0_nc.long_name = "pi0"
     pi0_nc[:, :, :, :] = np.reshape(pi0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                     (1, x_size, y_size, z_size))
 
-    sst = nc_file.createVariable("T_sfc", np.float32, ("time", "x", "y"), fill_value=1.0e36)
+    sst = nc_file.createVariable("T_sfc", np.float64, ("time", "x", "y"), fill_value=1.0e36)
     sst.long_name = "surface temperature"
     sst[:, :, :] = np.reshape(surface_t, (1, x_size, y_size))
 

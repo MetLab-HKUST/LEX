@@ -54,25 +54,28 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
                                                 heating_now, x3d4u, y3d4v, z3d4w, dt)
 
     # Turbulence model
-    if turb_opt == 1:  # Smagorinsky
+    if turb_opt == 1 or turb_opt == 2:  # Smagorinsky
         s11, s22, s33, s12, s13, s23, deform = turb.compute_deformation(rho0, u_now, v_now, w_now, x3d, y3d, z3d, x3d4u,
                                                                         y3d4v, z3d4w)
-        n2 = turb.compute_nm(theta_now, qv_now, z3d)
-        km, kh = turb.compute_k(deform, n2, x3d4u, y3d4v, z3d4w)
-        sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = turb.compute_smag(
-            rho0, km, kh, s11, s22, s33, s12, s13, s23, theta_now, qv_now, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
+        n2 = turb.compute_nm(theta_now, pi0, qv_now, z3d)
+        # n2 = turb.compute_nm(theta_now, qv_now, qc_now, z3d)
+        if turb_opt==1:
+            km, kh = turb.compute_k(deform, n2, x3d4u, y3d4v, z3d4w)
+            sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = turb.compute_smag(
+                rho0, km, kh, s11, s22, s33, s12, s13, s23, theta_now, qv_now, # qc_now, qr_now, nc_now, nr_now,
+                x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
+        elif turb_opt==2:
+            kmh, kmv, khh, khv = turb.compute_k2(rho0, s11, s22, s33, s12, s13, s23, n2, x3d4u, y3d4v, z3d4w, z3d)
+            sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = turb.compute_smag2(
+                rho0, kmh, kmv, khh, khv, s11, s22, s33, s12, s13, s23, theta_now, qv_now, # qc_now, qr_now, nc_now, nr_now,
+                x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
+
         sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
     else:
-        sgs_u = jnp.zeros((nl.nx + 1, nl.ny, nl.nz))
-        sgs_v = jnp.zeros((nl.nx, nl.ny + 1, nl.nz))
-        sgs_w = jnp.zeros((nl.nx, nl.ny, nl.nz + 1))
-        sgs_theta = jnp.zeros((nl.nx, nl.ny, nl.nz))
-        sgs_qv = jnp.zeros((nl.nx, nl.ny, nl.nz))
-        sgs_tend = (sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv)
+        sgs_tend = None
 
     # update pi' equation
-    theta_p_now = theta_now - theta0
-    buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0, theta_p_now, qv0, qv_now)
+    buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0, theta_now, qv0, qv_now)
     rtt = pres_eqn.calculate_rtt(rho0_theta0, theta_now, qv_now, buoyancy)
     adv4u, adv4v, adv4w = prep_momentum_eqn(rho0, u_now, v_now, w_now, flow_divergence, tau_x, tau_y,
                                             x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
@@ -82,18 +85,20 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
         fu = jnp.zeros((nl.nx, nl.ny + 1, nl.nz))
         fv = jnp.zeros((nl.nx + 1, nl.ny, nl.nz))
 
-    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, sgs_v, sgs_w,
+    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w,
                                    fu, fv, buoyancy, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
     pip_now = padding3_array(pip_now)
     if pic_opt:  # correct pi'
-        pip_const = correct_pip_constant2(pi0, theta0, qv0, pip_prev, theta_now, qv_now, theta_now, qv_now, pip_now,
-                                          x3d4u, y3d4v, z3d4w)
+        pip_const = correct_pip_constant2(pi0, theta0, qv0, # qc0, qr0,
+                                          pip_prev, theta_now, qv_now, # qc_prev, qr_prev,
+                                          theta_now, qv_now, # qc_now, qr_now,
+                                          pip_now, x3d4u, y3d4v, z3d4w)
         pip_now = pip_now + pip_const
     else:
         pip_const = -999.9
 
     # update momentum equations
-    theta_rho = theta_now * (1.0 + nl.repsm1 * qv_now)  # density potential temperature
+    theta_rho = theta_now * (1.0 + nl.reps * qv_now) / (1.0 + qv_now)  # density potential temperature
     u_next, v_next, w_next, du_dt, dv_dt, dw_dt = update_momentum_eqn_euler(u_now0, v_now0, w_now0, pi0, pip_now,
                                                                             theta_rho, adv4u, adv4v, adv4w, fu, fv, b8w,
                                                                             x3d, y3d, z3d, dt)
@@ -103,7 +108,7 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
                                        z3d4w, dt)
 
     # Turbulence model updates
-    if turb_opt == 1:    # Smagorinsky
+    if turb_opt == 1 or turb_opt == 2:    # Smagorinsky
         u_next = u_next + padding3u_array(sgs_u * dt)
         v_next = v_next + padding3v_array(sgs_v * dt)
         w_next = w_next + padding3_array(sgs_w * dt)
@@ -158,8 +163,7 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
                                                 heating_now, x3d4u, y3d4v, z3d4w, dt)
 
     # update pi' equation
-    theta_p_now = theta_now - theta0
-    buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0, theta_p_now, qv0, qv_now)
+    buoyancy, b8w = pres_eqn.calculate_buoyancy(theta0, theta_now, qv0, qv_now)
     rtt = pres_eqn.calculate_rtt(rho0_theta0, theta_now, qv_now, buoyancy)
     adv4u, adv4v, adv4w = prep_momentum_eqn(rho0, u_now, v_now, w_now, flow_divergence, tau_x, tau_y,
                                             x3d, y3d, z3d, x3d4u, y3d4v, z3d4w)
@@ -169,18 +173,18 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
         fu = np.zeros((nl.nx, nl.ny + 1, nl.nz))
         fv = np.zeros((nl.nx + 1, nl.ny, nl.nz))
 
-    sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = sgs_tend
-
-    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, sgs_v, sgs_w,
+    pip_now, info = solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w,
                                    fu, fv, buoyancy, x3d, x3d4u, y3d, y3d4v, z3d, z3d4w)
     pip_now = padding3_array(pip_now)
     if pic_opt:  # correct pi'
-        pip_const = correct_pip_constant2(pi0, theta0, qv0, pip_prev, theta_now, qv_now, theta_now, qv_now, pip_now,
-                                          x3d4u, y3d4v, z3d4w)
+        pip_const = correct_pip_constant2(pi0, theta0, qv0, # qc0, qr0,
+                                          pip_prev, theta_now, qv_now, # qc_prev, qr_prev,
+                                          theta_now, qv_now, # qc_now, qr_now,
+                                          pip_now, x3d4u, y3d4v, z3d4w)
         pip_now = pip_now + pip_const
 
     # update momentum equations
-    theta_rho = theta_now * (1.0 + nl.repsm1 * qv_now)  # density potential temperature
+    theta_rho = theta_now * (1.0 + nl.reps * qv_now) / (1.0 + qv_now)  # density potential temperature
     u_next, v_next, w_next, du_dt, dv_dt, dw_dt = update_momentum_eqn_euler(u_now0, v_now0, w_now0, pi0, pip_now,
                                                                             theta_rho, adv4u, adv4v, adv4w, fu, fv, b8w,
                                                                             x3d, y3d, z3d, dt)
@@ -190,7 +194,8 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
                                        z3d4w, dt)
 
     # Turbulence model
-    if turb_opt == 1:    # Smagorinsky
+    if turb_opt == 1 or turb_opt == 2:    # Smagorinsky
+        sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv = sgs_tend        
         u_next = u_next + padding3u_array(sgs_u * dt)
         v_next = v_next + padding3v_array(sgs_v * dt)
         w_next = w_next + padding3_array(sgs_w * dt)
@@ -238,11 +243,11 @@ def update_qv_euler(rho0_now, qv_now0, qv_now, u_now, v_now, w_now, flow_diverge
     return qv_next3, d_qv_dt
 
 
-def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, sgs_u, sgs_v, sgs_w, fu, fv, buoyancy,
+def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, fu, fv, buoyancy,
                    x3d, x3d4u, y3d, y3d4v, z3d, z3d4w):
     """ Solve the Poisson-like equation for pressure perturbations, pi\' (pip) """
-    rhs, rhs_adv, rhs_sgs, rhs_cor, rhs_buoy, rhs_pres = pres_eqn.rhs_of_pressure_equation(rho0_theta0, pi0, rtt, adv4u,
-                                                                                  adv4v, adv4w, sgs_u, sgs_v, sgs_w, fu, fv, buoyancy,
+    rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres = pres_eqn.rhs_of_pressure_equation(rho0_theta0, pi0, rtt, adv4u,
+                                                                                  adv4v, adv4w, fu, fv, buoyancy,
                                                                                   x3d, x3d4u, y3d, y3d4v, z3d4w)
 
     tol = 1.0e-4  # the tolerance level needs to be tested and tuned.
@@ -267,24 +272,26 @@ def correct_pip_constant(rho0_now, pip_now, x3d4u, y3d4v, z3d4w):
     return numerator / denominator
 
 
-def correct_pip_constant2(pi0_now, theta0_now, qv0_now, pip_prev, theta_prev, qv_prev, theta_now, qv_now, pip_now,
-                          x3d4u, y3d4v, z3d4w):
+def correct_pip_constant2(pi0_now, theta0_now, qv0_now, # qc0_now, qr0_now,
+                          pip_prev, theta_prev, qv_prev, # qc_prev, qr_prev,
+                          theta_now, qv_now, # qc_now, qr_now,
+                          pip_now, x3d4u, y3d4v, z3d4w):
     """ Add a constant to ensure total mass change is zero (to the accuracy of linearized approximation) """
-    beta = nl.p00 * nl.Cv / nl.Rd ** 2 * pi0_now ** ((nl.Cv - nl.Rd) / nl.Rd)
+
+    # theta_r0 = theta0_now * (1.0 + nl.repsm1 * qv0_now - qc0_now - qr0_now)  # base state density potential temperature
+    # theta_r1 = theta_prev * (1.0 + nl.repsm1 * qv_prev - qc_prev - qr_prev) - theta_r0
+    # theta_r2 = theta_now * (1.0 + nl.repsm1 * qv_now - qc_now - qr_now) - theta_r0
     theta_r0 = theta0_now * (1.0 + nl.repsm1 * qv0_now)  # base state density potential temperature
     theta_r1 = theta_prev * (1.0 + nl.repsm1 * qv_prev) - theta_r0
     theta_r2 = theta_now * (1.0 + nl.repsm1 * qv_now) - theta_r0
-    theta_r1a = jnp.where((theta_r1 < 1.0e-6) & (theta_r1 >= 0.0), 1.0e-6, theta_r1)
-    theta_r1b = jnp.where((theta_r1a > -1.0e-6) & (theta_r1a < 0.0), -1.0e-6, theta_r1a)
-    theta_r2a = jnp.where((theta_r2 < 1.0e-6) & (theta_r2 >= 0.0), 1.0e-6, theta_r2)
-    theta_r2b = jnp.where((theta_r2a > -1.0e-6) & (theta_r2a < 0.0), -1.0e-6, theta_r2a)
-    numerator = space_integration(beta * pip_prev / theta_r1b, x3d4u, y3d4v, z3d4w) - space_integration(
-        beta * pip_now / theta_r2b, x3d4u, y3d4v, z3d4w)
-    denominator = space_integration(beta / theta_r2b, x3d4u, y3d4v, z3d4w)
-    denominator_a = jnp.where((denominator < 1.0e-6) & (denominator >= 0.0), 1.0e-6, denominator)
-    denominator_b = jnp.where((denominator_a > -1.0e-6) & (denominator_a < 0.0), -1.0e-6, denominator_a)
-    # these statements are trying to prevent dividing by zero issues. The threshold needs tuning
-    return numerator / denominator_b
+    beta = nl.p00 * nl.Cv / nl.Rd ** 2 * pi0_now ** ((nl.Cv - nl.Rd) / nl.Rd) / theta_r0
+    alpha = nl.p00 * pi0_now ** (nl.Cv / nl.Rd) / nl.Rd / theta_r0 / theta_r0
+    numerator = space_integration(beta * (pip_prev - pip_now), x3d4u, y3d4v, z3d4w) + space_integration(
+        alpha * (theta_r2 - theta_r1), x3d4u, y3d4v, z3d4w)
+    denominator = space_integration(beta, x3d4u, y3d4v, z3d4w)
+    # denominator_a = jnp.where((denominator < 1.0e-6) & (denominator >= 0.0), 1.0e-6, denominator)
+    # denominator_b = jnp.where((denominator_a > -1.0e-6) & (denominator_a < 0.0), -1.0e-6, denominator_a)
+    return numerator/denominator
 
 
 def update_momentum_eqn_euler(u_now0, v_now0, w_now0, pi0_now, pip_now, theta_now, adv4u, adv4v, adv4w, fu, fv, b8w, x3d,
@@ -388,8 +395,8 @@ def padding3_array(arr):
 
 def padding3u_array(arr):
     """ Padding an array at U point with three ghost points on each side """
-    arr0 = arr.at[-(nl.ngx+1), :, :].set(arr[nl.ngx, :, :])  # make sure b.c. is same U
-    arr_x = jnp.concatenate((arr0[-(nl.ngx+1):-1, :, :], arr0, arr0[1:nl.ngx+1, :, :]), axis=0)
+    # arr0 = arr.at[-(nl.ngx+1), :, :].set(arr[nl.ngx, :, :])  # make sure b.c. is same U
+    arr_x = jnp.concatenate((arr[-(nl.ngx+1):-1, :, :], arr, arr[1:nl.ngx+1, :, :]), axis=0)
     arr_xy = jnp.concatenate((arr_x[:, -nl.ngy:, :], arr_x, arr_x[:, 0:nl.ngy, :]), axis=1)
     x_size, y_size, _ = jnp.shape(arr_xy)
     bottom = jnp.reshape(arr_xy[:, :, 0], (x_size, y_size, 1))
@@ -401,8 +408,8 @@ def padding3u_array(arr):
 
 def padding3v_array(arr):
     """ Padding an array at V point with three ghost points on each side """
-    arr0 = arr.at[:, -(nl.ngy+1), :].set(arr[:, nl.ngy, :])  # make sure b.c is same V
-    arr_x = jnp.concatenate((arr0[-nl.ngx:, :, :], arr0, arr0[0:nl.ngx, :, :]), axis=0)
+    # arr0 = arr.at[:, -(nl.ngy+1), :].set(arr[:, nl.ngy, :])  # make sure b.c is same V
+    arr_x = jnp.concatenate((arr[-nl.ngx:, :, :], arr, arr[0:nl.ngx, :, :]), axis=0)
     arr_xy = jnp.concatenate((arr_x[:, -(nl.ngy+1):-1, :], arr_x, arr_x[:, 1:nl.ngy+1, :]), axis=1)
     x_size, y_size, _ = jnp.shape(arr_xy)
     bottom = jnp.reshape(arr_xy[:, :, 0], (x_size, y_size, 1))
@@ -424,3 +431,12 @@ def padding3_0_array(arr):
     arr_xyz = jnp.concatenate((bottom, arr_xy, top), axis=2)
     # The ghost points at the bottom and top are more like placeholders, without practical use for now.
     return arr_xyz
+
+
+def padding2_array(arr):
+    """ Padding a 2D array with three ghost points on each side """
+    arr_x = jnp.concatenate((arr[-nl.ngx:, :,], arr, arr[0:nl.ngx, :,]), axis=0)
+    arr_xy = jnp.concatenate((arr_x[:, -nl.ngy:], arr_x, arr_x[:, 0:nl.ngy]), axis=1)
+    return arr_xy
+
+

@@ -1,13 +1,13 @@
 """ Conventional turbulence schemes """
 
-import numpy as np
 import jax.numpy as jnp
 import namelist_n_constants as nl
 import pressure_equations as pres_eqn
 import one_step_integration as one
 
 
-def compute_smag(rho, km, kh, s11, s22, s33, s12, s13, s23, theta, qv, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w):
+def compute_smag(rho, km, kh, s11, s22, s33, s12, s13, s23, theta, qv, # qc, qr, nc, nr,
+                 x3d, y3d, z3d, x3d4u, y3d4v, z3d4w):
     """ Compute the subgrid-scale turbulence tendencies using the Smagorinsky model """
     tau11 = -2.0 * km * s11    # density included
     tau22 = -2.0 * km * s22
@@ -29,7 +29,7 @@ def compute_smag(rho, km, kh, s11, s22, s33, s12, s13, s23, theta, qv, x3d, y3d,
     tau13_8w = pres_eqn.interpolate_scalar2w_0(tau13[:, :, nl.ngz:-nl.ngz])
     dtau13_dz8s = (tau13_8w[:, :, 1:] - tau13_8w[:, :, 0:-1]) / (
                    z3d4w[:, :, nl.ngz+1:-nl.ngz] - z3d4w[:, :, nl.ngz:-(nl.ngz+1)])
-    dtau13_dz = 0.5 * (dtau13_dz8s[nl.ngx-1:-nl.ngx, nl.ngy:-nl.ngy, :] -
+    dtau13_dz = 0.5 * (dtau13_dz8s[nl.ngx-1:-nl.ngx, nl.ngy:-nl.ngy, :] +
                        dtau13_dz8s[nl.ngx:-(nl.ngx-1), nl.ngy:-nl.ngy, :])
     sgs_u = -(dtau11_dx + dtau12_dy + dtau13_dz) / (0.5 * (
               rho[nl.ngx:-(nl.ngx-1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] +
@@ -48,7 +48,7 @@ def compute_smag(rho, km, kh, s11, s22, s33, s12, s13, s23, theta, qv, x3d, y3d,
     tau23_8w = pres_eqn.interpolate_scalar2w_0(tau23[:, :, nl.ngz:-nl.ngz])
     dtau23_dz8s = (tau23_8w[:, :, 1:] - tau23_8w[:, :, 0:-1]) / (
                    z3d4w[:, :, nl.ngz+1:-nl.ngz] - z3d4w[:, :, nl.ngz:-(nl.ngz+1)])
-    dtau23_dz = 0.5 * (dtau23_dz8s[nl.ngx:-nl.ngx, nl.ngy-1:-nl.ngy, :] -
+    dtau23_dz = 0.5 * (dtau23_dz8s[nl.ngx:-nl.ngx, nl.ngy-1:-nl.ngy, :] +
                        dtau23_dz8s[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy-1), :])
     sgs_v = -(dtau12_dx + dtau22_dy + dtau23_dz) / (0.5 * (
               rho[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy-1), nl.ngz:-nl.ngz] +
@@ -109,7 +109,191 @@ def compute_smag(rho, km, kh, s11, s22, s33, s12, s13, s23, theta, qv, x3d, y3d,
                        nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
 
     return sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv
-    
+
+
+def compute_smag2(rho, kmh, kmv, khh, khv, s11, s22, s33, s12, s13, s23, theta, qv, # qc, qr, nc, nr,
+                  x3d, y3d, z3d, x3d4u, y3d4v, z3d4w):
+    """ Compute the subgrid-scale turbulence tendencies using the Smagorinsky model """
+    tau11 = -2.0 * kmh * s11  # density included
+    tau22 = -2.0 * kmh * s22
+    tau33 = -2.0 * kmh * s33
+    tau12 = -2.0 * kmh * s12
+    tau13 = -2.0 * kmv * s13
+    tau23 = -2.0 * kmv * s23
+
+    dtau11_dx = (tau11[nl.ngx:-(nl.ngx - 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+                 tau11[nl.ngx - 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) / (
+                        x3d[nl.ngx:-(nl.ngx - 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+                        x3d[nl.ngx - 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    dtau12_dy8v = (tau12[nl.ngx - 1:-(nl.ngx - 1), nl.ngy:-(nl.ngy - 1), nl.ngz:-nl.ngz] -
+                   tau12[nl.ngx - 1:-(nl.ngx - 1), nl.ngy - 1:-nl.ngy, nl.ngz:-nl.ngz]) / (
+                          y3d[nl.ngx - 1:-(nl.ngx - 1), nl.ngy:-(nl.ngy - 1), nl.ngz:-nl.ngz] -
+                          y3d[nl.ngx - 1:-(nl.ngx - 1), nl.ngy - 1:-nl.ngy, nl.ngz:-nl.ngz])
+    dtau12_dy = 0.25 * (dtau12_dy8v[0:-1, 0:-1, :] + dtau12_dy8v[1:, 1:, :] +
+                        dtau12_dy8v[0:-1, 1:, :] + dtau12_dy8v[1:, 0:-1, :])
+    tau13_8w = pres_eqn.interpolate_scalar2w_0(tau13[:, :, nl.ngz:-nl.ngz])
+    dtau13_dz8s = (tau13_8w[:, :, 1:] - tau13_8w[:, :, 0:-1]) / (
+            z3d4w[:, :, nl.ngz + 1:-nl.ngz] - z3d4w[:, :, nl.ngz:-(nl.ngz + 1)])
+    dtau13_dz = 0.5 * (dtau13_dz8s[nl.ngx - 1:-nl.ngx, nl.ngy:-nl.ngy, :] +
+                       dtau13_dz8s[nl.ngx:-(nl.ngx - 1), nl.ngy:-nl.ngy, :])
+    sgs_u = -(dtau11_dx + dtau12_dy + dtau13_dz) / (0.5 * (
+            rho[nl.ngx:-(nl.ngx - 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] +
+            rho[nl.ngx - 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]))
+
+    dtau22_dy = (tau22[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy - 1), nl.ngz:-nl.ngz] -
+                 tau22[nl.ngx:-nl.ngx, nl.ngy - 1:-nl.ngy, nl.ngz:-nl.ngz]) / (
+                        y3d[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy - 1), nl.ngz:-nl.ngz] -
+                        y3d[nl.ngx:-nl.ngx, nl.ngy - 1:-nl.ngy, nl.ngz:-nl.ngz])
+    dtau12_dx8u = (tau12[nl.ngx:-(nl.ngx - 1), nl.ngy - 1:-(nl.ngy - 1), nl.ngz:-nl.ngz] -
+                   tau12[nl.ngx - 1:-nl.ngx, nl.ngy - 1:-(nl.ngy - 1), nl.ngz:-nl.ngz]) / (
+                          x3d[nl.ngx:-(nl.ngx - 1), nl.ngy - 1:-(nl.ngy - 1), nl.ngz:-nl.ngz] -
+                          x3d[nl.ngx - 1:-nl.ngx, nl.ngy - 1:-(nl.ngy - 1), nl.ngz:-nl.ngz])
+    dtau12_dx = 0.25 * (dtau12_dx8u[0:-1, 0:-1, :] + dtau12_dx8u[1:, 1:, :] +
+                        dtau12_dx8u[0:-1, 1:, :] + dtau12_dx8u[1:, 0:-1, :])
+    tau23_8w = pres_eqn.interpolate_scalar2w_0(tau23[:, :, nl.ngz:-nl.ngz])
+    dtau23_dz8s = (tau23_8w[:, :, 1:] - tau23_8w[:, :, 0:-1]) / (
+            z3d4w[:, :, nl.ngz + 1:-nl.ngz] - z3d4w[:, :, nl.ngz:-(nl.ngz + 1)])
+    dtau23_dz = 0.5 * (dtau23_dz8s[nl.ngx:-nl.ngx, nl.ngy - 1:-nl.ngy, :] +
+                       dtau23_dz8s[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy - 1), :])
+    sgs_v = -(dtau12_dx + dtau22_dy + dtau23_dz) / (0.5 * (
+            rho[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy - 1), nl.ngz:-nl.ngz] +
+            rho[nl.ngx:-nl.ngx, nl.ngy - 1:-nl.ngy, nl.ngz:-nl.ngz]))
+
+    dtau33_dz = (tau33[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] -
+                 tau33[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]) / (
+                        z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] -
+                        z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz])
+    dtau13_dx8s = (tau13[nl.ngx + 1:-(nl.ngx - 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+                   tau13[nl.ngx - 1:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) / (
+                          x3d[nl.ngx + 1:-(nl.ngx - 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+                          x3d[nl.ngx - 1:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    dtau13_dx = pres_eqn.interpolate_scalar2w_0(dtau13_dx8s)
+    dtau23_dy8s = (tau23[nl.ngx:-nl.ngx, nl.ngy + 1:-(nl.ngy - 1), nl.ngz:-nl.ngz] -
+                   tau23[nl.ngx:-nl.ngx, nl.ngy - 1:-(nl.ngy + 1), nl.ngz:-nl.ngz]) / (
+                          y3d[nl.ngx:-nl.ngx, nl.ngy + 1:-(nl.ngy - 1), nl.ngz:-nl.ngz] -
+                          y3d[nl.ngx:-nl.ngx, nl.ngy - 1:-(nl.ngy + 1), nl.ngz:-nl.ngz])
+    dtau23_dy = pres_eqn.interpolate_scalar2w_0(dtau23_dy8s)
+    rho8w = pres_eqn.interpolate_scalar2w(rho[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    sgs_w = -(dtau13_dx + dtau23_dy + dtau33_dz) / rho8w
+    sgs_w = sgs_w.at[:, :, -1].set(0.0)
+
+    # calculate the SGS tendency for theta
+    rho8u, rho8v, rho8w = stagger_scalar(rho)
+    khh8u, khh8v, _ = stagger_scalar(khh)
+    _, _, khv8w = stagger_scalar(khv)
+    dth_dx, dth_dy, dth_dz = compute_scalar_gradient(theta, x3d, y3d, z3d)
+    tau_th_x = -rho8u * khh8u * dth_dx
+    tau_th_y = -rho8v * khh8v * dth_dy
+    tau_th_z = -rho8w * khv8w * dth_dz
+    tau_th_z = tau_th_z.at[:, :, -1].set(0.0)
+    tau_th_z = tau_th_z.at[:, :, 0].set(0.0)
+    sgs_theta = -((tau_th_x[1:, :, :] - tau_th_x[0:-1, :, :]) / (
+            x3d4u[nl.ngx + 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+            x3d4u[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) +
+                  (tau_th_y[:, 1:, :] - tau_th_y[:, 0:-1, :]) / (
+                          y3d4v[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz:-nl.ngz] -
+                          y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy + 1), nl.ngz:-nl.ngz]) +
+                  (tau_th_z[:, :, 1:] - tau_th_z[:, :, 0:-1]) / (
+                          z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
+                          z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])) / rho[
+                                                                                          nl.ngx:-nl.ngx,
+                                                                                          nl.ngy:-nl.ngy,
+                                                                                          nl.ngz:-nl.ngz]
+
+    # calculate the SGS tendency for qv
+    dqv_dx, dqv_dy, dqv_dz = compute_scalar_gradient(qv, x3d, y3d, z3d)
+    tau_qv_x = -rho8u * khh8u * dqv_dx
+    tau_qv_y = -rho8v * khh8v * dqv_dy
+    tau_qv_z = -rho8w * khv8w * dqv_dz
+    tau_qv_z = tau_qv_z.at[:, :, -1].set(0.0)
+    tau_qv_z = tau_qv_z.at[:, :, 0].set(0.0)
+    # add surface flux
+    sgs_qv = -((tau_qv_x[1:, :, :] - tau_qv_x[0:-1, :, :]) / (
+            x3d4u[nl.ngx + 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+            x3d4u[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) +
+               (tau_qv_y[:, 1:, :] - tau_qv_y[:, 0:-1, :]) / (
+                       y3d4v[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz:-nl.ngz] -
+                       y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy + 1), nl.ngz:-nl.ngz]) +
+               (tau_qv_z[:, :, 1:] - tau_qv_z[:, :, 0:-1]) / (
+                       z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
+                       z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])) / rho[
+                                                                                       nl.ngx:-nl.ngx, nl.ngy:-nl.ngy,
+                                                                                       nl.ngz:-nl.ngz]
+
+    # # calculate the SGS tendency for qc
+    # dqc_dx, dqc_dy, dqc_dz = compute_scalar_gradient(qc, x3d, y3d, z3d)
+    # tau_qc_x = -rho8u * khh8u * dqc_dx
+    # tau_qc_y = -rho8v * khh8v * dqc_dy
+    # tau_qc_z = -rho8w * khv8w * dqc_dz
+    # tau_qc_z = tau_qc_z.at[:, :, (0, -1)].set(0.0)
+    # sgs_qc = -((tau_qc_x[1:, :, :] - tau_qc_x[0:-1, :, :]) / (
+    #         x3d4u[nl.ngx + 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+    #         x3d4u[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) +
+    #            (tau_qc_y[:, 1:, :] - tau_qc_y[:, 0:-1, :]) / (
+    #                    y3d4v[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz:-nl.ngz] -
+    #                    y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy + 1), nl.ngz:-nl.ngz]) +
+    #            (tau_qc_z[:, :, 1:] - tau_qc_z[:, :, 0:-1]) / (
+    #                    z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
+    #                    z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])) / rho[
+    #                                                                                    nl.ngx:-nl.ngx, nl.ngy:-nl.ngy,
+    #                                                                                    nl.ngz:-nl.ngz]
+    #
+    # # calculate the SGS tendency for qr
+    # dqr_dx, dqr_dy, dqr_dz = compute_scalar_gradient(qr, x3d, y3d, z3d)
+    # tau_qr_x = -rho8u * khh8u * dqr_dx
+    # tau_qr_y = -rho8v * khh8v * dqr_dy
+    # tau_qr_z = -rho8w * khv8w * dqr_dz
+    # tau_qr_z = tau_qr_z.at[:, :, (0, -1)].set(0.0)
+    # sgs_qr = -((tau_qr_x[1:, :, :] - tau_qr_x[0:-1, :, :]) / (
+    #         x3d4u[nl.ngx + 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+    #         x3d4u[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) +
+    #            (tau_qr_y[:, 1:, :] - tau_qr_y[:, 0:-1, :]) / (
+    #                    y3d4v[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz:-nl.ngz] -
+    #                    y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy + 1), nl.ngz:-nl.ngz]) +
+    #            (tau_qr_z[:, :, 1:] - tau_qr_z[:, :, 0:-1]) / (
+    #                    z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
+    #                    z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])) / rho[
+    #                                                                                    nl.ngx:-nl.ngx, nl.ngy:-nl.ngy,
+    #                                                                                    nl.ngz:-nl.ngz]
+    #
+    # # calculate the SGS tendency for nc
+    # dnc_dx, dnc_dy, dnc_dz = compute_scalar_gradient(nc, x3d, y3d, z3d)
+    # tau_nc_x = -rho8u * khh8u * dnc_dx
+    # tau_nc_y = -rho8v * khh8v * dnc_dy
+    # tau_nc_z = -rho8w * khv8w * dnc_dz
+    # tau_nc_z = tau_nc_z.at[:, :, (0, -1)].set(0.0)
+    # sgs_nc = -((tau_nc_x[1:, :, :] - tau_nc_x[0:-1, :, :]) / (
+    #         x3d4u[nl.ngx + 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+    #         x3d4u[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) +
+    #            (tau_nc_y[:, 1:, :] - tau_nc_y[:, 0:-1, :]) / (
+    #                    y3d4v[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz:-nl.ngz] -
+    #                    y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy + 1), nl.ngz:-nl.ngz]) +
+    #            (tau_nc_z[:, :, 1:] - tau_nc_z[:, :, 0:-1]) / (
+    #                    z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
+    #                    z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])) / rho[
+    #                                                                                    nl.ngx:-nl.ngx, nl.ngy:-nl.ngy,
+    #                                                                                    nl.ngz:-nl.ngz]
+    #
+    # # calculate the SGS tendency for nr
+    # dnr_dx, dnr_dy, dnr_dz = compute_scalar_gradient(nr, x3d, y3d, z3d)
+    # tau_nr_x = -rho8u * khh8u * dnr_dx
+    # tau_nr_y = -rho8v * khh8v * dnr_dy
+    # tau_nr_z = -rho8w * khv8w * dnr_dz
+    # tau_nr_z = tau_nr_z.at[:, :, (0, -1)].set(0.0)
+    # sgs_nr = -((tau_nr_x[1:, :, :] - tau_nr_x[0:-1, :, :]) / (
+    #         x3d4u[nl.ngx + 1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
+    #         x3d4u[nl.ngx:-(nl.ngx + 1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) +
+    #            (tau_nr_y[:, 1:, :] - tau_nr_y[:, 0:-1, :]) / (
+    #                    y3d4v[nl.ngx:-nl.ngx, nl.ngy + 1:-nl.ngy, nl.ngz:-nl.ngz] -
+    #                    y3d4v[nl.ngx:-nl.ngx, nl.ngy:-(nl.ngy + 1), nl.ngz:-nl.ngz]) +
+    #            (tau_nr_z[:, :, 1:] - tau_nr_z[:, :, 0:-1]) / (
+    #                    z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
+    #                    z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])) / rho[
+    #                                                                                    nl.ngx:-nl.ngx, nl.ngy:-nl.ngy,
+    #                                                                                    nl.ngz:-nl.ngz]
+
+    return sgs_u, sgs_v, sgs_w, sgs_theta, sgs_qv #, sgs_qc, sgs_qr, sgs_nc, sgs_nr
+
 
 def compute_deformation(rho, u, v, w, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w):
     """ Compute teh strain rate terms
@@ -204,13 +388,37 @@ def compute_deformation(rho, u, v, w, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w):
     return s11, s22, s33, s12, s13, s23, deformation
 
 
-def compute_nm(theta, qv, z3d):
+def compute_nm(theta, pi, qv, # qc, 
+               z3d): 
     """ Calculate the squared Brunt-Vaisala frequency """
+    # dry air
     theta_rho =  theta * (1.0 + nl.repsm1*qv)
     n28w = jnp.log(theta_rho[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] /
                  theta_rho[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz+1)]) / (
                  z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] -
                  z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz+1)]) * nl.g
+#     # cloudy cells
+#     # liquid only:
+#     t = theta * pi 
+#     prs = nl.p00*(pi**(nl.Cp/nl.Rd))
+#     qt = qv + qc
+#     qvs = sl.rslf(prs, t)
+#     ql = jnp.fmax(qt - qvs, 0.0)
+#     qv = jnp.fmax(qt - ql, 0.0)
+#     cpml = nl.Cp+ nl.Cpwv*qv + nl.Cpl*ql
+#     lh = 2.501e6 - 2360.0*t
+#     drdt = 17.67*(273.15-29.65)*qvs/((t-29.65)**2)
+#     gamma = nl.g*(1.0+qt)*(1.0+lh*qvs/(nl.Rd*t))/(cpml+lh*drdt)
+#     gamma_t = (gamma[:,:,1:] + gamma[:,:,0:-1]) / (t[:,:,1:] + t[:,:,0:-1])
+#     tavg = 0.5 * (t[:,:,0:-1] + t[:,:,1:])
+#     drdtavg = 0.5 * (drdt[:,:,0:-1] + drdt[:,:,1:])
+#     qvsavg =  0.5 * (qvs[:,:,0:-1] + qvs[:,:,1:])
+#     n28w_sat = nl.g*( ( jnp.log(t[:,:,1:] / t[:,:,0:-1]) / (z3d[:,:,1:] - z3d[:,:,0:-1]) + gamma_t) *
+#             (1.0 + tavg*drdtavg/(nl.eps + qvsavg)) - jnp.log(
+#                 (1.0 + qt[:,:,1:]) / (1.0 + qt[:,:,0:-1]) / (z3d[:,:,1:] - z3d[:,:,0:-1])))
+#     qcavg = 0.5 * (qc[:,:,0:-1] + qc[:,:,1:])
+#     n28w = jnp.where(qcavg[nl.ngx:-nl.ngx,nl.ngy:-nl.ngy,1:-1]>1.0e-5, n28w, n28w_sat[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 1:-1])
+    
     bottom, top = pres_eqn.extrapolate_bottom_top(n28w)    # bottom and top are at scalar levels
     n2_part = 0.5 * (n28w[:, :, 0:-1] + n28w[:, :, 1:])
     n2 = jnp.concatenate((bottom, n2_part, top), axis=2)
@@ -236,6 +444,31 @@ def compute_k(s2, n2, x3d4u, y3d4v, z3d4w):
     km = (cs * grid_scale)**2 * jnp.sqrt(s2n2)
     kh = km/prandtl
     return km, kh
+
+
+def compute_k2(rho, s11, s22, s33, s12, s13, s23, n2, x3d4u, y3d4v, z3d4w, z3d):
+    """ Calculate the Smagorinsky eddy viscosity and diffusivity
+
+    Vertical and horziontal directions use different coefficients
+    """
+    prandtl = 1.0
+    cs = 0.18
+    grid_scale_h2 = (x3d4u[1:, :, :] - x3d4u[0:-1, :, :]) * (
+        y3d4v[:, 1:, :] - y3d4v[:, 0:-1, :])
+    grid_scale_v2 = 1.0 / ((0.4*z3d)**(-2) +
+                           (z3d4w[:,:,1:]-z3d4w[:,:,0:-1])**(-2)
+                           )
+
+    deform_h = (2.0 * (s11**2 + s22**2 + s33**2) + 4.0 * s12**2) / rho**2
+
+    deform_v = 4.0 * (s13**2 + s23**2) / rho**2
+
+    kmh = cs**2 * grid_scale_h2 * deform_h
+    kmv = cs**2 * grid_scale_v2 * jnp.sqrt(jnp.fmax(deform_v - n2/prandtl, 0.0))
+
+    khh = kmh/prandtl
+    khv = kmv/prandtl
+    return kmh, kmv, khh, khv
 
 
 def compute_scalar_gradient(scalar, x3d, y3d, z3d):
