@@ -59,7 +59,7 @@ def save2nc(phys_state, sfc_others, grids, sprint_i, model_time):
     theta_1[:, :, :, :] = np.reshape(theta_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                      (1, x_size, y_size, z_size))
 
-    pip_1 = nc_file.createVariable("pip_now", np.float64, ("time", "x", "y", "z"), fill_value=1.0e36, zlib=True, complevel=2)
+    pip_1 = nc_file.createVariable("pip_now", np.float32, ("time", "x", "y", "z"), fill_value=1.0e36, zlib=True, complevel=2)
     pip_1.long_name = "pip for the current time"
     pip_1[:, :, :, :] = np.reshape(pip_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz],
                                    (1, x_size, y_size, z_size))
@@ -111,7 +111,7 @@ def save2nc(phys_state, sfc_others, grids, sprint_i, model_time):
                                      (1, x_size, y_size, z4w_size))
 
     if nl.pic_opt:
-        pc_1 = nc_file.createVariable("pip_const_now", np.float64, "time", fill_value=1.0e36, zlib=True, complevel=2)
+        pc_1 = nc_file.createVariable("pip_const_now", np.float32, "time", fill_value=1.0e36, zlib=True, complevel=2)
         pc_1.long_name = "pi' correction constant for the current time"
         pc_1[:] = pip_const
 
