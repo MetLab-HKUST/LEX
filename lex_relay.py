@@ -1,7 +1,7 @@
 """ One relay contains many sprints and is typically a complete simulation """
 
 import jax
-jax.config.update("jax_enable_x64", True)  # use double precision if necessary
+# jax.config.update("jax_enable_x64", True)  # use double precision if necessary
 import os
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"]=".9"
 os.environ["CUDA_VISIBLE_DEVICES"]="1"

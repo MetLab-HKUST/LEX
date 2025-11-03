@@ -49,8 +49,7 @@ def setup_grid_n_ic(ic_option):
     # elif ic_option==2:
         # I.C. #2
     else:
-        print("I.C.: undefined option!")
-        exit()
+        raise RuntimeError('Undefine I.C. option! Exiting ...')
 
     tauh, tauf = setup_damping_tau(z3d, z3d4w)
 
@@ -82,11 +81,11 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, qv0, pip, theta, qv, u, v, 
     zr = 2000.0
     rh = 0.1
     r = jnp.sqrt(((x3d - xc) / xr)**2 + ((y3d - yc) / yr)**2 + ((z3d - zc) / zr)**2)    # bubble
-    theta_p = 1.0 * (jnp.cos(r * np.pi/2.0))**2
+    theta_p = 1.75 * (jnp.cos(r * np.pi/2.0))**2
     theta_p = jnp.where(r > 1.0, 0.0, theta_p)
     if nl.rand_opt:
         # add random perturbations to theta
-        seed = 2024
+        seed = 2025
         key = jax.random.key(seed)
         noise = jax.random.uniform(key, shape=theta_p.shape, minval=0.5, maxval=1.5)
         theta_p = theta_p * noise
@@ -129,7 +128,7 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, qv0, pip, theta, qv, u, v, 
         qv0[:] = q0_sat * rh
         it = it + 1
 
-    print("    Hydrostatic balance of base state ensured after %4i iterations" % it)
+    # print("    Hydrostatic balance of base state ensured after %4i iterations" % it)
 
     pi = (rho0 * theta * (1.0 + nl.reps*qv0) / (1.0 + qv0) * nl.Rd / nl.p00)**(nl.Rd / nl.Cv)    # an estimate of total pi
     pip = pip.at[:].set(pi - pi0)

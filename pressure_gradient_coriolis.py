@@ -5,7 +5,7 @@ import namelist_n_constants as nl
 
 
 def pressure_gradient_force(pi0, pip, theta, x3d, y3d, z3d):
-    """ Calculate the pressure gradient force for momentum equations
+    """ Calculate the pressure gradient force for the momentum equations
 
     Assuming the input arrays have ghost points.
     """

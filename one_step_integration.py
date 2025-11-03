@@ -131,7 +131,7 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
         dw_dt = dw_dt + w_tend
         theta_next = theta_next + padding3_array(theta_tend * dt)
         d_theta_dt = d_theta_dt + theta_tend 
-        # Ignore for the warm buble case
+        # Ignore for the warm bubble case
 
     phys_state = (theta_next, u_next, v_next, w_next, pip_now, qv_next)
     tends = (d_theta_dt, du_dt, dv_dt, dw_dt, d_qv_dt)
@@ -250,8 +250,8 @@ def solve_pres_eqn(pip_prev, rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, fu, fv,
                                                                                   adv4v, adv4w, fu, fv, buoyancy,
                                                                                   x3d, x3d4u, y3d, y3d4v, z3d4w)
 
-    tol = 1.0e-4  # the tolerance level needs to be tested and tuned.
-    atol = 1.0e-9
+    tol = 1.0e-3  # the tolerance level needs to be tested and tuned.
+    atol = 1.0e-8
     # using previous step pi\' as the first guess x0
     # pip, info = jax.scipy.sparse.linalg.gmres(
     #     lambda beta:pres_eqn.laplace_of_pressure(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, rtt, beta),
