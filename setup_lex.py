@@ -22,6 +22,14 @@ def setup_grid_n_ic(ic_option):
     # Coordinates for w point variables
     z1d4w = np.linspace(0.0 - nl.ngz * nl.dz, (nl.nz + nl.ngz) * nl.dz, nl.nz + 1 + 2 * nl.ngz)
     _, _, z3d4w = np.meshgrid(x1d, y1d, z1d4w, indexing="ij")
+    cc1 = (z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] - 
+           z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) / (
+               z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] - 
+               z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1])
+    cc2 = 1.0 - cc1 
+    # cc1 and cc2 are used for vertical interpolation from two adjacent vertical half levels to
+    # the cell center. cc1 is the weight for the lower half level (k-1/2), and cc2 is the weight 
+    # for the upper half level (k+1/2).
 
     # Allocate all physics state variables for I.C.
     # "0" is used to denote the reference state; _p denotes perturbations
@@ -57,8 +65,8 @@ def setup_grid_n_ic(ic_option):
     # physical state initial condition
     phys_state = (theta, u, v, w, pip, qv)
     base_state = (rho0_theta0, rho0, theta0, pi0, qv0, surface_t)
-    grids = (x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, tauh, tauf)
-    model_opt = (nl.integrate_opt, nl.damp_opt, nl.rad_opt, nl.cor_opt, nl.sfc_opt, nl.pic_opt, nl.turb_opt)    # model options
+    grids = (x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, cc1, cc2, tauh, tauf)
+    model_opt = (nl.solver_opt, nl.damp_opt, nl.rad_opt, nl.cor_opt, nl.sfc_opt, nl.pic_opt, nl.turb_opt)    # model options
 
     return phys_state, base_state, grids, model_opt
 
@@ -81,7 +89,7 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, qv0, pip, theta, qv, u, v, 
     zr = 2000.0
     rh = 0.1
     r = jnp.sqrt(((x3d - xc) / xr)**2 + ((y3d - yc) / yr)**2 + ((z3d - zc) / zr)**2)    # bubble
-    theta_p = 1.75 * (jnp.cos(r * np.pi/2.0))**2
+    theta_p = 1.0 * (jnp.cos(r * np.pi/2.0))**2
     theta_p = jnp.where(r > 1.0, 0.0, theta_p)
     if nl.rand_opt:
         # add random perturbations to theta
@@ -127,11 +135,9 @@ def setup_ic_option1(rho0, theta0, rho0_theta0, pi0, qv0, pip, theta, qv, u, v, 
         q0_sat = rslf(pressure0, t0)
         qv0[:] = q0_sat * rh
         it = it + 1
-
     # print("    Hydrostatic balance of base state ensured after %4i iterations" % it)
 
     pi = (rho0 * theta * (1.0 + nl.reps*qv0) / (1.0 + qv0) * nl.Rd / nl.p00)**(nl.Rd / nl.Cv)    # an estimate of total pi
-    pip = pip.at[:].set(pi - pi0)
     pressure = pi**(nl.Cp / nl.Rd) * nl.p00
     t = theta * pi
     q_sat = rslf(pressure, t)

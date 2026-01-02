@@ -2,6 +2,7 @@
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import namelist_n_constants as nl
 
 
@@ -148,6 +149,53 @@ def advection_w(rho0, u, v, w, weps, flow_divergence, x3d4u, y3d4v, z3d):
     return adv_tendency
 
 
+def advection_pi(rho0, pi0, pip, u, v, w, x3d, y3d, z3d, cc1, cc2):
+    """ low-order scheme to compute the advection term for pi'.
+     
+    Because we need to compute it in acoustic steps, we use a low-order scheme here 
+    to save computational cost.
+    """
+    # if base state pi0 is not horizontally uniform, we should compuate dpi0_dx and dpi0_dy
+    # and add them to the total gradient
+    dpi_dx = (pip[nl.ngx:-nl.ngx+1, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] - 
+              pip[nl.ngx-1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) / (
+                  x3d[nl.ngx:-nl.ngx+1, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] - 
+                  x3d[nl.ngx-1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+
+    dpi_dy = (pip[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy+1, nl.ngz:-nl.ngz] -
+              pip[nl.ngx:-nl.ngx, nl.ngy-1:-nl.ngy, nl.ngz:-nl.ngz]) / (
+                  y3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy+1, nl.ngz:-nl.ngz] -
+                  y3d[nl.ngx:-nl.ngx, nl.ngy-1:-nl.ngy, nl.ngz:-nl.ngz])
+
+    dpi0_dz = (pi0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] -
+               pi0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz-1:-nl.ngz]) / (
+                   z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] -
+                   z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz-1:-nl.ngz])
+
+    dpip_dz = (pip[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] -
+               pip[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz-1:-nl.ngz]) / (
+                   z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] -
+                   z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz-1:-nl.ngz])
+    dpi_dz = dpi0_dz + dpip_dz
+               
+    u_dpi_dx = u[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * dpi_dx
+    v_dpi_dy = v[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * dpi_dy
+    w_dpi_dz = w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * dpi_dz
+    w_dpi_dz = w_dpi_dz.at[:, :, 0].set(0.0)  # set lower and upper boundary flux to zero, correct for flat terrain
+    w_dpi_dz = w_dpi_dz.at[:, :, -1].set(0.0) 
+
+    rho08w = 0.5 * (rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz-1:-nl.ngz] +
+                    rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:])
+
+    adv_pi_tendency = -(0.5 * (u_dpi_dx[1:, :, :] + u_dpi_dx[0:-1, :, :]) +
+                        0.5 * (v_dpi_dy[:, 1:, :] + v_dpi_dy[:, 0:-1, :]) +
+                        (cc1 * w_dpi_dz[:, :, 0:-1] * rho08w[:, :, 0:-1] +
+                         cc2 * w_dpi_dz[:, :, 1:] * rho08w[:, :, 1:])
+                         ) / rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
+
+    return adv_pi_tendency
+
+
 def get_divergence(rho0, u, v, w, x3d4u, y3d4v, z3d4w):
     """ Compute the divergence of (rho0*u, rho0*v, rho0*w) """
     rho8u_part = 0.5 * (rho0[0:-1, :, :] + rho0[1:, :, :])
@@ -175,6 +223,16 @@ def get_divergence(rho0, u, v, w, x3d4u, y3d4v, z3d4w):
     div_rho_u = div_x + div_y + div_z  # ghost points kept
 
     return div_rho_u
+
+
+def get_divergence2(u, v, w, x3d4u, y3d4v, z3d4w):
+    """ Compute the divergence of (u, v, w) """
+    div_x = (u[1:, :, :] - u[0:-1, :, :]) / (x3d4u[1:, :, :] - x3d4u[0:-1, :, :])
+    div_y = (v[:, 1:, :] - v[:, 0:-1, :]) / (y3d4v[:, 1:, :] - y3d4v[:, 0:-1, :])
+    div_z = (w[:, :, 1:] - w[:, :, 0:-1]) / (z3d4w[:, :, 1:] - z3d4w[:, :, 0:-1])
+    div_u = div_x + div_y + div_z  # ghost points kept
+
+    return div_u
 
 
 def get_2d_divergence(rho0, u, v, x3d4u, y3d4v):

@@ -10,7 +10,9 @@ def pressure_gradient_force(pi0, pip, theta, x3d, y3d, z3d):
     Assuming the input arrays have ghost points.
     """
     pi_total = pip    # if pi0 is horizontally uniform
-    # pi_total = pi0 + pip
+    # pi_total = pi0 + pip    
+    # if pi0 is not horizontally uniform, it is probably better to calculate the pressure gradient force due to
+    # base state in advance, instead of repeating the calculation here.
     dpi_dx = (pi_total[nl.ngx:-(nl.ngx-1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
               pi_total[nl.ngx-1:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]) / (
               x3d[nl.ngx:-(nl.ngx-1), nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] -
@@ -51,3 +53,22 @@ def calculate_coriolis_force(u, v):
     # du/dt = fv + ...
     # dv/dt = -fu + ...
     return fu, fv
+
+
+def calculate_coriolis_force_with_lspgrad(u, v):
+    """ Calculate the Coriolis force, putting them at u and v points """
+    fv = nl.fCor * (0.25 * (v[nl.ngx-1:-nl.ngx, nl.ngy:-(nl.ngy+1), nl.ngz:-nl.ngz] +
+                           v[nl.ngx-1:-nl.ngx, nl.ngy+1:-nl.ngy, nl.ngz:-nl.ngz] +
+                           v[nl.ngx:-(nl.ngx-1), nl.ngy:-(nl.ngy+1), nl.ngz:-nl.ngz] +
+                           v[nl.ngx:-(nl.ngx-1), nl.ngy+1:-nl.ngy, nl.ngz:-nl.ngz]
+                           ) - 0.0)
+
+    fu = nl.fCor * (0.25 * (u[nl.ngx:-(nl.ngx+1), nl.ngy-1:-nl.ngy, nl.ngz:-nl.ngz] +
+                           u[nl.ngx:-(nl.ngx+1), nl.ngy:-(nl.ngy-1), nl.ngz:-nl.ngz] +
+                           u[nl.ngx+1:-nl.ngx, nl.ngy-1:-nl.ngy, nl.ngz:-nl.ngz] +
+                           u[nl.ngx+1:-nl.ngx, nl.ngy:-(nl.ngy-1), nl.ngz:-nl.ngz]
+                           ) - 1.0)
+    # du/dt = fv + ...
+    # dv/dt = -fu + ...
+    return fu, fv
+

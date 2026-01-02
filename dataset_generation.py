@@ -89,7 +89,7 @@ def read_sim_data(filename, grids):
     qv_min = np.min(qv_seq, axis=(0,1), keepdims=True)
     qv_max = np.max(qv_seq, axis=(0,1), keepdims=True)
 
-    x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, _, _ = grids
+    x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, cc1, cc2, tauh, tauf = grids
     theta_p = th_seq - np.min(theta_min.squeeze(), axis=(0,1))    # strictly speaking, we should subtract base state
     del_th = laplace_of_tensor(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, theta_p)
     qv_p = qv_seq - np.min(qv_min.squeeze(), axis=(0,1))

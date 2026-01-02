@@ -59,7 +59,7 @@ def _loss_and_aux(params, ic, truth, scaling_params):
 
     theta_true, u_true, v_true, w_true, pip_true, qv_true, del_th_true, del_qv_true = truth
 
-    x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, _, _ = grids
+    x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, cc1, cc2, tauh, tauf = grids
     theta_p = theta_stack - theta_min    # strictly speaking, we should subtract base state
     del_th_stack = dgen.laplace_of_tensor_jnp(x3d, x3d4u, y3d, y3d4v, z3d, z3d4w, theta_p)
     qv_p = qv_stack - qv_min

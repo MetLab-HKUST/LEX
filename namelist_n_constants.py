@@ -1,28 +1,31 @@
+
 """ Namelist variables and constants for LEX """
 import dl_models as dlm
 import optax
 
-# Time integration
-dt = 15            # one-step integration time step
-sprint_n = 12      # dt*sprint_n is the interval of data saving
-relay_n = 10       # number of sprints, relay_n*sprint_n*dt is the total integration time
-asselin_r = 0.25   # r factor in the Asselin filtering
-integrate_opt = 1  # 1: SSPRK3, 2: Leapfrog
+# Sovler setup
+dt = 0.25            # the time interval (s) for one RK step integration
+total_time = 1800    # total integration time (s)
+sprint_n = 20        # the number of fused RK steps in one sprint
+save_time = 300      # time interval (s) between two data savings
+solver_opt = 2       # 1: pseudo-incompressible equations;
+                     # 2: fully compressible equations with expicit time-splitting
+n_sound = 16         # number of acoustic steps in one RK step (for solver_opt=2)
 
 # Grid configuration
-dx = 600.0   # x-direction grid spacing in meters
-dy = 600.0   # y-direction grid spacing in meters
-dz = 300.0   # z-direction grid spacing in meters
-nx = 40      # number of grid cells in x-direction
-ny = 40      # number of grid cells in y-direction
-nz = 40      # number of grid cells in z-direction
+dx = 100.0   # x-direction grid spacing in meters
+dy = 100.0   # y-direction grid spacing in meters
+dz = 100.0   # z-direction grid spacing in meters
+nx = 240     # number of grid cells in x-direction
+ny = 240     # number of grid cells in y-direction
+nz = 120     # number of grid cells in z-direction
 ngx = 3      # number of ghost points on one side of the x-direction
 ngy = 3      # number of ghost points on one side of the y-direction
 ngz = 1      # number of ghost points on one side of the z-direction
 
 # output file name
 output_format = 1    # 1: netCDF4 (float32); 2: Zarr (float64)
-file_name_format = "experiments/lex_out_%0.4i.nc"
+file_name_format = "experiments/lex_out_%0.4i.nc"        # %0.4i prints the spring number
 base_file_name = "experiments/lex_reference_state.nc"    # only netCDF4
 save_num_levels = 1
 
@@ -31,8 +34,8 @@ ic_option = 1
 rand_opt = False
 
 # Coriolis force
-cor_opt = False
-fCor = 0.0   # Coriolis parameter
+cor_opt = 0  # 0: no Coriolis; 1: with it; 2: with Coriolis+Large-scale pressure gradient
+fCor = 1.0e-4   # Coriolis parameter
 
 # Surface flux scheme
 sfc_opt = False
