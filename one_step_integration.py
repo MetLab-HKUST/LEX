@@ -139,7 +139,7 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
         du_dt = (u_next - u_now0) / dt
         dv_dt = (v_next - v_now0) / dt 
         dw_dt = (w_next - w_now0) / dt
-        d_pip_dt = (pip_next - pip_now0) / dt 
+        d_pip_dt = (pip_next - pip_now0) / dt
 
     # update theta equation 
     theta_next, d_theta_dt = update_theta_euler(rho0, theta_now0, theta_now, u_now, v_now, w_now, 

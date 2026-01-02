@@ -190,8 +190,9 @@ def advection_pi(rho0, pi0, pip, u, v, w, x3d, y3d, z3d, cc1, cc2):
     adv_pi_tendency = -(0.5 * (u_dpi_dx[1:, :, :] + u_dpi_dx[0:-1, :, :]) +
                         0.5 * (v_dpi_dy[:, 1:, :] + v_dpi_dy[:, 0:-1, :]) +
                         (cc1 * w_dpi_dz[:, :, 0:-1] * rho08w[:, :, 0:-1] +
-                         cc2 * w_dpi_dz[:, :, 1:] * rho08w[:, :, 1:])
+                         cc2 * w_dpi_dz[:, :, 1:] * rho08w[:, :, 1:]
                          ) / rho0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
+                        )
 
     return adv_pi_tendency
 

@@ -1,4 +1,3 @@
-
 """ Namelist variables and constants for LEX """
 import dl_models as dlm
 import optax
@@ -6,11 +5,11 @@ import optax
 # Sovler setup
 dt = 0.25            # the time interval (s) for one RK step integration
 total_time = 1800    # total integration time (s)
-sprint_n = 20        # the number of fused RK steps in one sprint
 save_time = 300      # time interval (s) between two data savings
 solver_opt = 2       # 1: pseudo-incompressible equations;
                      # 2: fully compressible equations with expicit time-splitting
 n_sound = 16         # number of acoustic steps in one RK step (for solver_opt=2)
+sprint_n = 20        # the number of fused RK steps in one sprint
 
 # Grid configuration
 dx = 100.0   # x-direction grid spacing in meters
