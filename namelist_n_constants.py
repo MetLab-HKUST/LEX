@@ -6,10 +6,12 @@ import optax
 dt = 0.25            # the time interval (s) for one RK step integration
 total_time = 1800    # total integration time (s)
 save_time = 300      # time interval (s) between two data savings
-solver_opt = 2       # 1: pseudo-incompressible equations;
-                     # 2: fully compressible equations with expicit time-splitting
+sprint_n = 10        # the number of fused RK steps in one sprint
+solver_opt = 3       # 1: pseudo-incompressible equations;
+                     # 2: fully compressible equations with expicit time-splitting;
+                     # 3: fully compressible equations with vertically implicit solver.
 n_sound = 16         # number of acoustic steps in one RK step (for solver_opt=2)
-sprint_n = 20        # the number of fused RK steps in one sprint
+alpha = 0.6          # off-centering parameter for acoustic step (for solver_opt=3)
 
 # Grid configuration
 dx = 100.0   # x-direction grid spacing in meters

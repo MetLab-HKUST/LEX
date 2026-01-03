@@ -24,7 +24,7 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     if solver_opt == 1:
         theta_now0, u_now0, v_now0, w_now0, pip_prev, qv_now0 = phys_state_now
         theta_now, u_now, v_now, w_now, _, qv_now = phys_state
-    elif solver_opt == 2:
+    elif solver_opt == 2 or solver_opt == 3:
         theta_now0, u_now0, v_now0, w_now0, pip_now0, qv_now0 = phys_state_now
         theta_now, u_now, v_now, w_now, pip_now, qv_now = phys_state
 
@@ -117,7 +117,7 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
             dv_dt = dv_dt + sgs_v
             dw_dt = dw_dt + sgs_w
 
-    elif solver_opt == 2:
+    else:
         dt_sound = nl.dt / nl.n_sound
         rk_n_sound = round(dt / dt_sound)
         # number of acoustic steps of each RK substep
@@ -133,9 +133,16 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
         rhs_pi = 0.0    # placeholder. We may add diabatic terms later.
         
         theta_rho = theta_now * (1.0 + nl.reps * qv_now) / (1.0 + qv_now)  # density potential temperature
-        u_next, v_next, w_next, pip_next = sound(u_now0, v_now0, w_now0, pi0, pip_now0, 
-                                                 rhs_u, rhs_v, rhs_w, rhs_pi, theta_rho, rho0, 
-                                                 rk_n_sound, dt_sound, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, cc1, cc2)        
+        if solver_opt == 2:
+            u_next, v_next, w_next, pip_next = sound(u_now0, v_now0, w_now0, pi0, pip_now0, 
+                                                     rhs_u, rhs_v, rhs_w, rhs_pi, theta_rho, rho0, 
+                                                     rk_n_sound, dt_sound, x3d, y3d, z3d, 
+                                                     x3d4u, y3d4v, z3d4w, cc1, cc2)  
+        elif solver_opt == 3:
+            u_next, v_next, w_next, pip_next = sound_implicit(u_now0, v_now0, w_now0, pi0, pip_now0, 
+                                                              rhs_u, rhs_v, rhs_w, rhs_pi, theta_rho, rho0,
+                                                              rk_n_sound, dt_sound, x3d, y3d, z3d, 
+                                                              x3d4u, y3d4v, z3d4w, cc1, cc2)  
         du_dt = (u_next - u_now0) / dt
         dv_dt = (v_next - v_now0) / dt 
         dw_dt = (w_next - w_now0) / dt
@@ -155,7 +162,7 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
         d_theta_dt = d_theta_dt + sgs_theta
         qv_next = qv_next + padding3_array(sgs_qv * dt)
         d_qv_dt = d_qv_dt + sgs_qv
-
+ 
     # Rayleigh damping
     if damp_opt:
         u_tend, v_tend, w_tend, theta_tend = bc.rayleigh_damping(tauh, tauf, u_next, v_next, w_next, theta_next)
@@ -172,7 +179,7 @@ def rk_sub_step0(phys_state_now, phys_state, base_state, grids, model_opt, dt):
     if solver_opt == 1:
         phys_state = (theta_next, u_next, v_next, w_next, pip_now, qv_next)
         tends = (d_theta_dt, du_dt, dv_dt, dw_dt, d_qv_dt)
-    elif solver_opt == 2:
+    elif solver_opt == 2 or solver_opt == 3:
         phys_state = (theta_next, u_next, v_next, w_next, pip_next, qv_next)
         tends = (d_theta_dt, d_pip_dt, du_dt, dv_dt, dw_dt, d_qv_dt)
         info = -999
@@ -197,7 +204,7 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
     if solver_opt == 1:
         theta_now0, u_now0, v_now0, w_now0, pip_prev, qv_now0 = phys_state_now
         theta_now, u_now, v_now, w_now, _, qv_now = phys_state
-    elif solver_opt == 2:
+    elif solver_opt == 2 or solver_opt == 3:
         theta_now0, u_now0, v_now0, w_now0, pip_now0, qv_now0 = phys_state_now
         theta_now, u_now, v_now, w_now, pip_now, qv_now = phys_state
 
@@ -245,8 +252,7 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
             du_dt = du_dt + sgs_u
             dv_dt = dv_dt + sgs_v
             dw_dt = dw_dt + sgs_w
-
-    if solver_opt == 2:
+    else:
         dt_sound = nl.dt / nl.n_sound
         rk_n_sound = round(dt / dt_sound)
         # number of acoustic steps of each RK substep
@@ -264,9 +270,16 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
         rhs_pi = 0.0   # placeholder. We may add diabatic terms later.
         
         theta_rho = theta_now * (1.0 + nl.reps * qv_now) / (1.0 + qv_now)  # density potential temperature
-        u_next, v_next, w_next, pip_next = sound(u_now0, v_now0, w_now0, pi0, pip_now0, 
-                                                 rhs_u, rhs_v, rhs_w, rhs_pi, theta_rho, rho0, 
-                                                 rk_n_sound, dt_sound, x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, cc1, cc2)
+        if solver_opt == 2:
+            u_next, v_next, w_next, pip_next = sound(u_now0, v_now0, w_now0, pi0, pip_now0, 
+                                                     rhs_u, rhs_v, rhs_w, rhs_pi, theta_rho, rho0, 
+                                                     rk_n_sound, dt_sound, x3d, y3d, z3d, 
+                                                     x3d4u, y3d4v, z3d4w, cc1, cc2)  
+        elif solver_opt == 3:
+            u_next, v_next, w_next, pip_next = sound_implicit(u_now0, v_now0, w_now0, pi0, pip_now0, 
+                                                              rhs_u, rhs_v, rhs_w, rhs_pi, theta_rho, rho0,
+                                                              rk_n_sound, dt_sound, x3d, y3d, z3d, 
+                                                              x3d4u, y3d4v, z3d4w, cc1, cc2)  
         du_dt = (u_next - u_now0) / dt
         dv_dt = (v_next - v_now0) / dt 
         dw_dt = (w_next - w_now0) / dt
@@ -301,7 +314,7 @@ def rk_sub_step_other(phys_state_now, phys_state, base_state, grids, heating, sf
     if solver_opt == 1:
         phys_state = (theta_next, u_next, v_next, w_next, pip_now, qv_next)
         tends = (d_theta_dt, du_dt, dv_dt, dw_dt, d_qv_dt)
-    elif solver_opt == 2:
+    elif solver_opt == 2 or solver_opt == 3:
         phys_state = (theta_next, u_next, v_next, w_next, pip_next, qv_next)
         tends = (d_theta_dt, d_pip_dt, du_dt, dv_dt, dw_dt, d_qv_dt)
 
@@ -380,7 +393,6 @@ def correct_pip_constant2(pi0_now, theta0_now, qv0_now, # qc0_now, qr0_now,
 def sound(u_now, v_now, w_now, pi0_now, pip_now, rhs_u, rhs_v, rhs_w, rhs_pi, theta_rho, rho0, rk_n_sound, dt_sound, 
           x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, cc1, cc2):
     """ Acoustic steps to advance u, v, w, and pi' """
-
     piadv = pi0_now + pip_now
     pi0_now0 = pi0_now
     pip_now0 = pip_now
@@ -412,6 +424,99 @@ def sound(u_now, v_now, w_now, pi0_now, pip_now, rhs_u, rhs_v, rhs_w, rhs_pi, th
         w_now = w_next
         pip_now = pip_next
     # end of acoustic steps
+
+    return u_next, v_next, w_next, pip_next
+
+
+def sound_implicit(u_now, v_now, w_now, pi0_now, pip_now, rhs_u, rhs_v, rhs_w, rhs_pi, theta_rho, rho0, rk_n_sound, dt_sound, 
+                   x3d, y3d, z3d, x3d4u, y3d4v, z3d4w, cc1, cc2):
+    """ Acoustic steps to advance u, v, w, and pi'
+    
+    Implicit treatment of vertical velocity and pressure perturbation 
+    """
+    piadv = pi0_now + pip_now
+    pi0_now0 = pi0_now
+    pip_now0 = pip_now
+
+    for i in range(rk_n_sound):
+        pres_grad4u, pres_grad4v = pres_grad.pressure_gradient_force_horizontal(pi0_now, pip_now, theta_rho, x3d, y3d)
+        du_dt = pres_grad4u + rhs_u
+        u_next = u_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + du_dt * dt_sound
+        dv_dt = pres_grad4v + rhs_v
+        v_next = v_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + dv_dt * dt_sound
+        u_next = padding3u_array(u_next)
+        v_next = padding3v_array(v_next)
+
+        # solve the vertical velocity implicitly
+        cth = nl.Cp * theta_rho 
+        cthrc = cth * nl.Rd / nl.Cv 
+        cth8w = 0.5 * (cth[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] + 
+                       cth[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1])
+        cthrc8w = 0.5 * (cthrc[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] + 
+                         cthrc[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1])    # no ghost points, no bottom and top w level 
+        
+        # compute the RHS term of the implicit equation first 
+        beta = 1.0 - nl.alpha        
+        divergence = adv.get_divergence2(u_next, v_next, beta*w_now, x3d4u, y3d4v, z3d4w)
+        con_tau = -nl.Rd / nl.Cv * (
+            piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * divergence[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
+            )
+        adv4pi = adv.advection_pi(rho0, pi0_now0, pip_now0, u_next, v_next, beta*w_now, x3d, y3d, z3d, cc1, cc2)
+        pi_new = pip_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + dt_sound * (con_tau + adv4pi + rhs_pi) 
+        pgz_other = -cth8w * (pi_new[:,:,1:] - pi_new[:,:,0:-1]) / (
+            z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] - z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz+1)]
+            )
+
+        pres_grad4w = pres_grad.pressure_gradient_force_vertical(pip_now, theta_rho, z3d)
+        wk_other = w_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz-1] + dt_sound * (
+            beta*pres_grad4w[:, :, 1:-1] + rhs_w[:, :, 1:-1]
+            )
+
+        Fk = nl.alpha * dt_sound * pgz_other + wk_other 
+        Fk = jnp.reshape(Fk, (nl.nx, nl.ny, nl.nz-1, 1))   # shape (nx, ny, nz-1, 1) for tridiagonal solver
+
+        # compute PZU and PZL 
+        dz = z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] - z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1]
+        dz8w = z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] - z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]
+        pzu = piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / (dz[:, :, 1:] * dz8w[:, :, 1:-1])
+        pzl = piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / (dz[:, :, 0:-1] * dz8w[:, :, 1:-1]) 
+      
+        # compute DPZU and DPZL 
+        dpiadv_dz = (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] - piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]) / dz8w 
+        dpiadv_dz = dpiadv_dz.at[:, :, 0].set(0.0)
+        dpiadv_dz = dpiadv_dz.at[:, :, -1].set(0.0)
+        dpzu = dpiadv_dz[:, :, 2:] / (2.0 * dz8w[:, :, 1:-1]) 
+        dpzl = dpiadv_dz[:, :, 0:-2] / (2.0 * dz8w[:, :, 1:-1])
+
+        # compute the tridiagonal matrix coefficients 
+        alph2_dtau2 = (nl.alpha * dt_sound) ** 2
+        Ak = -alph2_dtau2 * (cthrc8w * pzl - cth8w * dpzl) 
+        Bk = 1.0 + alph2_dtau2 * cthrc8w * (pzu + pzl)
+        Ck = -alph2_dtau2 * (cthrc8w * pzu + cth8w * dpzu) 
+        Ak = Ak.at[:, :, 0].set(0.0)
+        Ck = Ck.at[:, :, -1].set(0.0)
+
+        # solve the tridiagonal matrix system 
+        w_next = jax.lax.linalg.tridiagonal_solve(Ak, Bk, Ck, Fk)
+        w_next = jnp.concatenate([jnp.zeros((nl.nx, nl.ny, 1)), w_next[:, :, :, 0], jnp.zeros((nl.nx, nl.ny, 1))], axis=2)  
+        w_next = padding3_array(w_next)
+
+        # update the Exner pressure         
+        w_mix = nl.alpha * w_next + beta * w_now 
+        divergence = adv.get_divergence2(u_next, v_next, w_mix, x3d4u, y3d4v, z3d4w)
+        adv4pi = adv.advection_pi(rho0, pi0_now0, pip_now0, u_next, v_next, w_mix, x3d, y3d, z3d, cc1, cc2)
+        d_pip_dt = -nl.Rd / nl.Cv * (
+            piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] * divergence[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz]
+            ) + adv4pi + rhs_pi 
+        pip_next = pip_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz] + 1.1*d_pip_dt * dt_sound
+        # the 1.1 factor is added to dampen divergence, gamma_d = 0.1 is a typical choice in CM1 and WRF
+        pip_next = padding3_array(pip_next)
+
+        u_now = u_next
+        v_now = v_next
+        w_now = w_next
+        pip_now = pip_next
+        # end of acoustic steps
 
     return u_next, v_next, w_next, pip_next
 
