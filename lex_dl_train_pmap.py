@@ -14,7 +14,7 @@ from flax.training import train_state, orbax_utils, common_utils
 import optax
 import orbax.checkpoint
 import time as Time
-from one_sprint_functions import ssprk3_sprint_dl_train_vmap
+from one_sprint_functions import ws_rk3_sprint_dl_train_vmap
 import namelist_n_constants as nl
 import setup_lex as setl
 import dataset_generation as dgen
@@ -70,7 +70,7 @@ def _loss_and_aux(params, ic, truth, scaling_params):
 
     # Adding ghost points
     
-    theta_stack, u_stack, v_stack, w_stack, pip_stack, qv_stack = ssprk3_sprint_dl_train_vmap(
+    theta_stack, u_stack, v_stack, w_stack, pip_stack, qv_stack = ws_rk3_sprint_dl_train_vmap(
         theta_batch, u_batch, v_batch, w_batch, pip_batch, qv_batch,
         baseState, grids, modelOpt, params, scaling_params
     )

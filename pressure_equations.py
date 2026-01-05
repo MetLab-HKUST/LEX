@@ -68,8 +68,10 @@ def rhs_of_pressure_equation(rho0_theta0, pi0, rtt, adv4u, adv4v, adv4w, fu, fv,
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz + 1:-nl.ngz] -
             z3d4w[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-(nl.ngz + 1)])
 
-    rhs_pres = - horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v,
-                                                    rtt, pi0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    # We only need to the following if the reference state is not horizontally uniform.     
+    # rhs_pres = - horizontal_laplace_of_pressure_grad(x3d, x3d4u, y3d, y3d4v,
+    #                                               rtt, pi0[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz])
+    rhs_pres = 0.0     
 
     rhs = rhs_adv + rhs_cor + rhs_buoy + rhs_pres
     return rhs, rhs_adv, rhs_cor, rhs_buoy, rhs_pres

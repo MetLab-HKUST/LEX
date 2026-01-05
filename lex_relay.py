@@ -1,7 +1,7 @@
 """ One relay contains many sprints and is typically a complete simulation """
 
 import jax
-jax.config.update("jax_enable_x64", True)    # double precision if necessary
+# jax.config.update("jax_enable_x64", True)    # double precision if necessary
 import os
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"]=".9"
 os.environ["CUDA_VISIBLE_DEVICES"]="1"
@@ -45,7 +45,7 @@ timeSprints = 0.0
 for i in range(relay_n):
     print("Sprint #%0.4i" % (i+1))
     wallTime = time.time()
-    physState, sfcOthers = sp.ssprk3_sprint(physState, baseState, grids, modelOpt)
+    physState, sfcOthers = sp.ws_rk3_sprint(physState, baseState, grids, modelOpt)
     if i > 0:
         timeSprints = time.time() - wallTime + timeSprints
     else:

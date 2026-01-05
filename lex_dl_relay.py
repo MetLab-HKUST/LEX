@@ -28,7 +28,7 @@ timeSetup = time.time() - startTime
 
 # do first-step integration
 wallTime = time.time()
-physState, sfcOthers = sp.first_step_integration_ssprk3(physState, baseState, grids, modelOpt)
+physState, sfcOthers = sp.first_step_integration_ws_rk3(physState, baseState, grids, modelOpt)
 time1stStep = time.time() - wallTime
 print("First step integration done.")
 
@@ -94,7 +94,7 @@ timeSprints = 0.0
 for i in range(nl.relay_n):
     print("Sprint #%0.4i" % (i+1))
     wallTime = time.time()
-    physState, sfcOthers = sp.ssprk3_sprint_dl(physState, baseState, grids, modelOpt, dlState.params, scalingParams)
+    physState, sfcOthers = sp.ws_rk3_sprint_dl(physState, baseState, grids, modelOpt, dlState.params, scalingParams)
 
     if i > 1:
         timeSprints = time.time() - wallTime + timeSprints
