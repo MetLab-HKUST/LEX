@@ -8,7 +8,7 @@ LES has two dynamical cores. One adopts the pseudo-incompressible equations and 
 
 If you run LEX without any deep learning component, you should use **lex_relay.py**. For running LEX with a deep learning SGS model, please use **lex_dl_relay.py**. Training the deep learning SGS model should use **lex_dl_train.py**. 
 
-The figure below shows the deep learning SGS model's testing result. The benchmark simulation used 100-m grid spacing in all three direcitons. The coarse-resolution runs used 600-m horizontal grid spacing and 300-m vertical grid spacing.
+The figure below shows the deep learning subgrid-scale (DL-SGS) model's testing result. The benchmark simulation used 100-m grid spacing in all three direcitons. The coarse-resolution runs used 600-m horizontal grid spacing and 300-m vertical grid spacing.
 
 ![Warm Bubble Test](initial_comparison/theta_perturbation_dl_test.jpg)
 
