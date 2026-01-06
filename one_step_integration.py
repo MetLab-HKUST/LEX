@@ -573,19 +573,19 @@ def sound_implicit_rk_step0(u_now, v_now, w_now, pi0, pip_now, pip_star,
     dz8w = z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] - z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]
     thr8w = 0.5 * (theta_rho[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] + 
                    theta_rho[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1])
-    coef_common = (nl.alpha * dt_sound)**2 * nl.Cp * thr8w / dz8w[:, :, 1:-1]
+    lhs_prefactor = (nl.alpha * dt_sound)**2 * nl.Cp * thr8w / dz8w[:, :, 1:-1]
 
     dpiadv_dz = (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] - piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]) / dz8w 
-    Ak = -coef_common * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / dz[:, :, 0:-1] -
+    Ak = -lhs_prefactor * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / dz[:, :, 0:-1] -
                          dpiadv_dz[:, :, 0:-2] / 2.0)
-    Ck = -coef_common * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
+    Ck = -lhs_prefactor * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
                          dpiadv_dz[:, :, 2:] / 2.0)
-    Bk = 1.0 + coef_common * nl.Rd/nl.Cv * (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
+    Bk = 1.0 + lhs_prefactor * nl.Rd/nl.Cv * (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
                                             piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / dz[:, :, 0:-1])
     Ak = Ak.at[:, :, 0].set(0.0)
     Ck = Ck.at[:, :, -1].set(0.0)
 
-    coef2 = nl.alpha * dt_sound**2 * nl.Cp * thr8w
+    rhs3_prefactor = nl.alpha * dt_sound**2 * nl.Cp * thr8w
     beta = 1.0 - nl.alpha 
     for i in range(rk_n_sound):
         # explicit integration for u and v equations
@@ -607,7 +607,7 @@ def sound_implicit_rk_step0(u_now, v_now, w_now, pi0, pip_now, pip_star,
         d_pi_tend_dz = (pi_tend_mix[:, :, 1:] - pi_tend_mix[:, :, 0:-1]) / dz8w[:, :, 1:-1]
         pres_grad4w = pres_grad.pressure_gradient_force_vertical(pip_now, theta_rho, z3d)
         Dk = w_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz-1] + dt_sound * (
-            rhs_w[:, :, 1:-1] + pres_grad4w[:, :, 1:-1]) - coef2 * d_pi_tend_dz
+            rhs_w[:, :, 1:-1] + pres_grad4w[:, :, 1:-1]) - rhs3_prefactor * d_pi_tend_dz
         Dk = jnp.reshape(Dk, (nl.nx, nl.ny, nl.nz-1, 1))   # shape (nx, ny, nz-1, 1) for tridiagonal solver
 
         # solve the tridiagonal matrix system 
@@ -692,19 +692,19 @@ def sound_implicit_rk_step1(u_now, v_now, w_now, pi0, pip_now, pip_star,
     dz8w = z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] - z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]
     thr8w = 0.5 * (theta_rho[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] + 
                    theta_rho[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1])
-    coef_common = (nl.alpha * dt_sound)**2 * nl.Cp * thr8w / dz8w[:, :, 1:-1]
+    lhs_prefactor = (nl.alpha * dt_sound)**2 * nl.Cp * thr8w / dz8w[:, :, 1:-1]
 
     dpiadv_dz = (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] - piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]) / dz8w 
-    Ak = -coef_common * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / dz[:, :, 0:-1] -
+    Ak = -lhs_prefactor * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / dz[:, :, 0:-1] -
                          dpiadv_dz[:, :, 0:-2] / 2.0)
-    Ck = -coef_common * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
+    Ck = -lhs_prefactor * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
                          dpiadv_dz[:, :, 2:] / 2.0)
-    Bk = 1.0 + coef_common * nl.Rd/nl.Cv * (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
+    Bk = 1.0 + lhs_prefactor * nl.Rd/nl.Cv * (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
                                             piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / dz[:, :, 0:-1])
     Ak = Ak.at[:, :, 0].set(0.0)
     Ck = Ck.at[:, :, -1].set(0.0)
 
-    coef2 = nl.alpha * dt_sound**2 * nl.Cp * thr8w
+    rhs3_prefactor = nl.alpha * dt_sound**2 * nl.Cp * thr8w
     beta = 1.0 - nl.alpha 
     for i in range(rk_n_sound):
         # explicit integration for u and v equations
@@ -726,7 +726,7 @@ def sound_implicit_rk_step1(u_now, v_now, w_now, pi0, pip_now, pip_star,
         d_pi_tend_dz = (pi_tend_mix[:, :, 1:] - pi_tend_mix[:, :, 0:-1]) / dz8w[:, :, 1:-1]
         pres_grad4w = pres_grad.pressure_gradient_force_vertical(pip_now, theta_rho, z3d)
         Dk = w_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz-1] + dt_sound * (
-            rhs_w[:, :, 1:-1] + pres_grad4w[:, :, 1:-1]) - coef2 * d_pi_tend_dz
+            rhs_w[:, :, 1:-1] + pres_grad4w[:, :, 1:-1]) - rhs3_prefactor * d_pi_tend_dz
         Dk = jnp.reshape(Dk, (nl.nx, nl.ny, nl.nz-1, 1))   # shape (nx, ny, nz-1, 1) for tridiagonal solver
 
         # solve the tridiagonal matrix system 
@@ -811,19 +811,19 @@ def sound_implicit_rk_step2(u_now, v_now, w_now, pi0, pip_now, pip_star,
     dz8w = z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] - z3d[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]
     thr8w = 0.5 * (theta_rho[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] + 
                    theta_rho[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1])
-    coef_common = (nl.alpha * dt_sound)**2 * nl.Cp * thr8w / dz8w[:, :, 1:-1]
+    lhs_prefactor = (nl.alpha * dt_sound)**2 * nl.Cp * thr8w / dz8w[:, :, 1:-1]
 
     dpiadv_dz = (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:] - piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, 0:-nl.ngz]) / dz8w 
-    Ak = -coef_common * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / dz[:, :, 0:-1] -
+    Ak = -lhs_prefactor * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / dz[:, :, 0:-1] -
                          dpiadv_dz[:, :, 0:-2] / 2.0)
-    Ck = -coef_common * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
+    Ck = -lhs_prefactor * (nl.Rd/nl.Cv * piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
                          dpiadv_dz[:, :, 2:] / 2.0)
-    Bk = 1.0 + coef_common * nl.Rd/nl.Cv * (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
+    Bk = 1.0 + lhs_prefactor * nl.Rd/nl.Cv * (piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz] / dz[:, :, 1:] +
                                             piadv[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz:-nl.ngz-1] / dz[:, :, 0:-1])
     Ak = Ak.at[:, :, 0].set(0.0)
     Ck = Ck.at[:, :, -1].set(0.0)
 
-    coef2 = nl.alpha * dt_sound**2 * nl.Cp * thr8w
+    rhs3_prefactor = nl.alpha * dt_sound**2 * nl.Cp * thr8w
     beta = 1.0 - nl.alpha 
     for i in range(rk_n_sound):
         # explicit integration for u and v equations
@@ -845,7 +845,7 @@ def sound_implicit_rk_step2(u_now, v_now, w_now, pi0, pip_now, pip_star,
         d_pi_tend_dz = (pi_tend_mix[:, :, 1:] - pi_tend_mix[:, :, 0:-1]) / dz8w[:, :, 1:-1]
         pres_grad4w = pres_grad.pressure_gradient_force_vertical(pip_now, theta_rho, z3d)
         Dk = w_now[nl.ngx:-nl.ngx, nl.ngy:-nl.ngy, nl.ngz+1:-nl.ngz-1] + dt_sound * (
-            rhs_w[:, :, 1:-1] + pres_grad4w[:, :, 1:-1]) - coef2 * d_pi_tend_dz
+            rhs_w[:, :, 1:-1] + pres_grad4w[:, :, 1:-1]) - rhs3_prefactor * d_pi_tend_dz
         Dk = jnp.reshape(Dk, (nl.nx, nl.ny, nl.nz-1, 1))   # shape (nx, ny, nz-1, 1) for tridiagonal solver
 
         # solve the tridiagonal matrix system 
