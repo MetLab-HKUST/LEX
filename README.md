@@ -12,4 +12,6 @@ The figure below shows the deep learning subgrid-scale (DL-SGS) model's testing 
 
 ![Warm Bubble Test](initial_comparison/theta_perturbation_dl_test.jpg)
 
+### Reference
+Zhu, X., Qu, Y., and Shi, X.: LEX v1.6.0: a new large-eddy simulation model in JAX with GPU acceleration and automatic differentiation, *Geosci. Model Dev.*, 19, 1103–1120, https://doi.org/10.5194/gmd-19-1103-2026, 2026.
 
